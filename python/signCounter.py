@@ -15,8 +15,8 @@ from collections import defaultdict
 
 
 class SignCounter:
-    def __init__(self, metadata_file, maximum_overlap, files):
-        self.maximum_overlap = int(maximum_overlap)
+    def __init__(self, metadata_file, minimum_overlap, files):
+        self.minimum_overlap = int(minimum_overlap)
         self.all_files = []
         self.metadata = {}
         self.time_slots = {}
@@ -53,7 +53,7 @@ class SignCounter:
         if len(self.all_files) > 0:
             for f in self.all_files:
                 self.process_file(f)
-                self.output_result()
+                self.generate_result()
         else:
             print("No EAF files to process.", file=sys.stderr)
 
@@ -131,7 +131,7 @@ class SignCounter:
 
                         current_hand_data = list_of_glosses[tier_id_start + last_end_on + " S" + str(signer_id)]
                         current_hand_begin = current_hand_data['annotations'][0]['begin']
-                        if last_end is not None and current_hand_begin > (last_end - self.maximum_overlap):
+                        if last_end is not None and current_hand_begin > (last_end - self.minimum_overlap):
                             # Begin new unit
                             list_of_gloss_units.append(unit)
                             unit = []
@@ -170,12 +170,12 @@ class SignCounter:
                     region = self.metadata[person]
                     self.freqsPerRegion[region][gloss] += 1
 
-    def output_result(self):
+    def generate_result(self):
         number_of_tokens = 0
         number_of_types = 0
         number_of_singletons = 0
 
-        data4json = {}
+        self.sign_counts = {}
 
         # print("Gloss\tFrequency\tFrequency per region")
 
@@ -208,31 +208,36 @@ class SignCounter:
 
             # print(region_columns)
 
-            data4json[gloss] = {'frequency': self.freqs[gloss], 'numberOfSigners': number_of_signers,
+            self.sign_counts[gloss] = {'frequency': self.freqs[gloss], 'numberOfSigners': number_of_signers,
                                     'frequenciesPerRegion': region_frequencies}
 
-        print(json.dumps(data4json, sort_keys=True, indent=4))
-        print("#tokens: " + str(number_of_tokens), file=sys.stderr)
-        print("#types: " + str(number_of_types), file=sys.stderr)
-        print("#singletons: " + str(number_of_singletons), file=sys.stderr)
+        # print(json.dumps(data4json, sort_keys=True, indent=4))
+        # print("#tokens: " + str(number_of_tokens), file=sys.stderr)
+        # print("#types: " + str(number_of_types), file=sys.stderr)
+        # print("#singletons: " + str(number_of_singletons), file=sys.stderr)
+
+
+    def get_result(self):
+        return self.sign_counts
 
 
 if __name__ == "__main__":
-    usage = "Usage: \n" + sys.argv[0] + "-m <metadata file> -o <maximum overlap> <file|directory ...>"
+    usage = "Usage: \n" + sys.argv[0] + " -m <metadata file> -o <mimimum overlap> <file|directory ...>"
     errors = []
     optlist, file_list = getopt.getopt(sys.argv[1:], 'm:o:')
     metadata_fname = ''
+    min_overlap = None
     for opt in optlist:
         if opt[0] == '-m':
             metadata_fname = opt[1]
         if opt[0] == '-o':
-            max_overlap = opt[1]
+            min_overlap = opt[1]
 
     if metadata_fname is None or metadata_fname == '':
         errors.append("No metadata file given.")
 
-    if max_overlap is None or max_overlap == '':
-        errors.append("No maximum overlap file given.")
+    if min_overlap is None or min_overlap == '':
+        errors.append("No minimum overlap file given.")
 
     if file_list is None or len(file_list) == 0:
         errors.append("No files or directories given.")
@@ -241,6 +246,8 @@ if __name__ == "__main__":
         print("Errors:")
         print("\n".join(errors))
         print(usage)
+        exit(1)
 
-    signCounter = SignCounter(metadata_fname, max_overlap, file_list)
+    signCounter = SignCounter(metadata_fname, min_overlap, file_list)
     signCounter.run()
+    print(json.dumps(signCounter.get_result(), sort_keys=True, indent=4))
