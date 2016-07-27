@@ -15,7 +15,7 @@ from collections import defaultdict
 
 
 class SignCounter:
-    def __init__(self, metadata_file, minimum_overlap, files):
+    def __init__(self, metadata_file, files, minimum_overlap=0):
         self.minimum_overlap = int(minimum_overlap)
         self.all_files = []
         self.metadata = {}
@@ -253,6 +253,6 @@ if __name__ == "__main__":
         print(usage)
         exit(1)
 
-    signCounter = SignCounter(metadata_fname, min_overlap, file_list)
+    signCounter = SignCounter(metadata_fname, file_list, min_overlap)
     signCounter.run()
     print(json.dumps(signCounter.get_result(), sort_keys=True, indent=4))

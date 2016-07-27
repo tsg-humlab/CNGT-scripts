@@ -33,7 +33,7 @@ class GlossExtractor:
     Extracts video fragments for glosses from CNGT EAFs.
     """
 
-    def __init__(self, files, min_overlap, extra_time, video_directory, gloss_directory, ffmpeg_cmd='ffmpeg'):
+    def __init__(self, files, video_directory, gloss_directory, min_overlap=0, extra_time=0, ffmpeg_cmd='ffmpeg'):
         """
         :param files: list of EAF files / directories containing EAF files
         :param min_overlap: minimal overlap for two handed signs
@@ -198,7 +198,7 @@ class GlossExtractor:
                                                    (current_gloss["begin"], current_gloss["end"]),
                                                    self.min_overlap)
                 if not overlap_with_current:
-                    self.create_extract_command(fname, participant, current_gloss, videos[participant])
+                    self.extract_video_fragment(fname, participant, current_gloss, videos[participant])
                     current_gloss = {
                         "value": annotation["value"],
                         "begin": annotation["begin"],
@@ -208,9 +208,9 @@ class GlossExtractor:
                     current_gloss["end"] = max(annotation["end"], current_gloss["end"]) # extend the current gloss
                 else:  # overlap but NOT same gloss value
                     if annotation["end"] <= current_gloss["end"]:  # annotation is within current gloss
-                        self.create_extract_command(fname, participant, annotation, videos[participant])
+                        self.extract_video_fragment(fname, participant, annotation, videos[participant])
                     else:  # annotation extends outside current gloss
-                        self.create_extract_command(fname, participant, current_gloss, videos[participant])
+                        self.extract_video_fragment(fname, participant, current_gloss, videos[participant])
                         current_gloss = {
                             "value": annotation["value"],
                             "begin": annotation["begin"],
@@ -234,8 +234,8 @@ class GlossExtractor:
         # start: milliseconds to seconds; shift left by extra_time
         start = str((gloss["begin"] / 1000.0) - self.extra_time)
 
-        # duration: milliseconds to second; shift end right by extra_time
-        duration = str(((gloss["end"] - gloss["begin"]) / 1000.0) + self.extra_time)
+        # duration: milliseconds to second; shift end right by 2 * extra_time, 1 time at the front, 1 time at the back
+        duration = str(((gloss["end"] - gloss["begin"]) / 1000.0) + (2 * self.extra_time))
 
         value = re.sub(r'[/\?<>\\:\*\|]', '__', gloss["value"])
         f = re.sub(r'\.eaf$', '', os.path.basename(urlparse(fname).path))
@@ -251,12 +251,13 @@ class GlossExtractor:
                "-i", self.video_directory + os.sep + video,
                "-ss", start,
                "-t", duration,
-               "-c",  "copy", output_dir + os.sep + new_video_file]
+               "-c",  "copy",
+               output_dir + os.sep + new_video_file]
         print(" ".join(cmd))
         Popen(cmd)
 
 
-def has_overlap(first, second, min_overlap):
+def has_overlap(first, second, min_overlap=0):
     """
     Determines if there is overlap between the first and second interval accounting for a minimal overlap.
     If an interval is within the other, there is overlap no matter the amount of overlap.
@@ -320,5 +321,13 @@ if __name__ == "__main__":
         print(usage)
         exit(1)
 
-    gloss_extractor = GlossExtractor(file_list, minimal_overlap, time_begin_end, video_dir, gloss_dir, ffmpeg_command)
+    print("OPTIONS")
+    print("Files: " + ", ".join(file_list), file=sys.stderr)
+    print("Minimal overlap: " + str(minimal_overlap))
+    print("Extra time at beginning and end: " + str(time_begin_end), file=sys.stderr)
+    print("Video directory: " + video_dir, file=sys.stderr)
+    print("Gloss output directory: " + gloss_dir, file=sys.stderr)
+    print("ffmpeg command: " + ffmpeg_command, file=sys.stderr)
+
+    gloss_extractor = GlossExtractor(file_list, video_dir, gloss_dir, minimal_overlap, time_begin_end, ffmpeg_command)
     gloss_extractor.run()
