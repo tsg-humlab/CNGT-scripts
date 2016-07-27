@@ -133,6 +133,7 @@ class GlossExtractor:
         :param xml: the EAF XML
         :return:
         """
+        self.time_slots = {}
         for time_slot in xml.findall("//TIME_SLOT"):
             time_slot_id = time_slot.attrib['TIME_SLOT_ID']
             self.time_slots[time_slot_id] = time_slot.attrib['TIME_VALUE']
@@ -321,9 +322,9 @@ if __name__ == "__main__":
         print(usage)
         exit(1)
 
-    print("OPTIONS")
+    print("OPTIONS", file=sys.stderr)
     print("Files: " + ", ".join(file_list), file=sys.stderr)
-    print("Minimal overlap: " + str(minimal_overlap))
+    print("Minimal overlap: " + str(minimal_overlap), file=sys.stderr)
     print("Extra time at beginning and end: " + str(time_begin_end), file=sys.stderr)
     print("Video directory: " + video_dir, file=sys.stderr)
     print("Gloss output directory: " + gloss_dir, file=sys.stderr)

@@ -182,45 +182,26 @@ class SignCounter:
 
         self.sign_counts = {}
 
-        # print("Gloss\tFrequency\tFrequency per region")
-
         for gloss in sorted(self.freqs.keys()):
-            # print(gloss + "\t" + str(self.freqs[gloss]), end='')
             number_of_types += 1
             number_of_tokens += self.freqs[gloss]
             if self.freqs[gloss] == 1:
                 number_of_singletons += 1
 
             # Person frequencies
-            person_columns = ''
-            number_of_signers = 0;
+            number_of_signers = 0
             for person in sorted(self.freqsPerPerson.keys()):
                 if gloss in self.freqsPerPerson[person]:
-                    person_columns += "\t" + person
-                    person_columns += "\t" + str(self.freqsPerPerson[person][gloss])
                     number_of_signers += 1
 
-            # print(person_columns, end='')
-
             # Region frequencies
-            region_columns = ''
-            region_frequencies = []
+            region_frequencies = {}
             for region in sorted(self.freqsPerRegion.keys()):
                 if gloss in self.freqsPerRegion[region]:
-                    region_columns += "\t" + region
-                    region_columns += "\t" + str(self.freqsPerRegion[region][gloss])
-                    region_frequencies.append({region: self.freqsPerRegion[region][gloss]})
-
-            # print(region_columns)
+                    region_frequencies[region] = self.freqsPerRegion[region][gloss]
 
             self.sign_counts[gloss] = {'frequency': self.freqs[gloss], 'numberOfSigners': number_of_signers,
                                     'frequenciesPerRegion': region_frequencies}
-
-        # print(json.dumps(data4json, sort_keys=True, indent=4))
-        # print("#tokens: " + str(number_of_tokens), file=sys.stderr)
-        # print("#types: " + str(number_of_types), file=sys.stderr)
-        # print("#singletons: " + str(number_of_singletons), file=sys.stderr)
-
 
     def get_result(self):
         return self.sign_counts
