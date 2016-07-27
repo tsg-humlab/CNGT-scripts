@@ -153,11 +153,16 @@ class SignCounter:
             tmp = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
             for annotation in unit:
                 gloss = annotation['value']
-                re.sub(r'\n', '', gloss)
-                re.sub(r'\t', '', gloss)
-                re.sub(r'\s\s+', ' ', gloss)
-                re.sub(r'^\s+', '', gloss)
-                re.sub(r'\s+$', '', gloss)
+
+                try:
+                    re.sub(r'\n', '', gloss)
+                    re.sub(r'\t', '', gloss)
+                    re.sub(r'\s\s+', ' ', gloss)
+                    re.sub(r'^\s+', '', gloss)
+                    re.sub(r'\s+$', '', gloss)
+                except TypeError:
+                    pass
+
                 if not gloss == '':
                     tmp[gloss]['participants'][annotation['participant']] += 1
 
