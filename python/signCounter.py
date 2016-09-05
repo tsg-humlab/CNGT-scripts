@@ -31,15 +31,15 @@ class SignCounter:
         self.load_metadata(metadata_file)
 
     def add_file(self, fname):
-        if fname.endswith(".eaf"):
-            if os.path.isfile(fname):
+        if os.path.isfile(fname):
+            if fname.endswith(".eaf"):
                 self.all_files.append(fname)
-            elif os.path.isdir(fname):
-                files_in_dir = os.listdir(fname)
-                for f in files_in_dir:
-                    self.add_file(f)
-            else:
-                print("No such file of directory: " + fname, file=sys.stderr)
+        elif os.path.isdir(fname):
+            files_in_dir = os.listdir(fname)
+            for f in files_in_dir:
+                self.add_file(fname + os.sep + f)
+        else:
+            print("No such file of directory: " + fname, file=sys.stderr)
 
     def load_metadata(self, metadata_file):
         with open(metadata_file) as meta:
@@ -81,8 +81,11 @@ class SignCounter:
             if match and ('PARENT_REF' not in tier.attrib or tier.attrib['PARENT_REF'] == ''):
                 tier_id_prefix = match.group(1)
                 hand = match.group(2)
-                participant = tier.attrib['PARTICIPANT']
-                list_of_glosses[tier_id]["participant"] = participant
+
+                participant = ""
+                if 'PARTICIPANT' in tier.attrib:
+                    participant = tier.attrib['PARTICIPANT']
+                    list_of_glosses[tier_id]["participant"] = participant
                 list_of_glosses[tier_id]["annotations"] = []
 
                 for annotation in tier.findall("ANNOTATION/ALIGNABLE_ANNOTATION"):
