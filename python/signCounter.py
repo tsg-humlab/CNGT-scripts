@@ -23,7 +23,7 @@ class SignCounter:
 
         self.freqs = defaultdict(lambda: 0)
         self.freqsPerPerson = defaultdict(lambda: defaultdict(int))
-        self.freqsPerRegion = defaultdict(lambda: defaultdict(int))
+        self.freqsPerRegion = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
         for f in files:
             self.add_file(f)
@@ -176,7 +176,7 @@ class SignCounter:
                     self.freqsPerPerson[person][gloss] += 1
 
                     region = self.metadata[person]
-                    self.freqsPerRegion[region][gloss] += 1
+                    self.freqsPerRegion[region][person][gloss] += 1
 
     def generate_result(self):
         number_of_tokens = 0
@@ -198,10 +198,13 @@ class SignCounter:
                     number_of_signers += 1
 
             # Region frequencies
-            region_frequencies = {}
+            region_frequencies = defaultdict(lambda: defaultdict(int))
             for region in sorted(self.freqsPerRegion.keys()):
-                if gloss in self.freqsPerRegion[region]:
-                    region_frequencies[region] = self.freqsPerRegion[region][gloss]
+                # region_frequencies[region]['frequency'] = 0
+                for person in sorted(self.freqsPerRegion[region].keys()):
+                    if gloss in self.freqsPerRegion[region][person]:
+                        region_frequencies[region]['frequency'] += self.freqsPerRegion[region][person][gloss]
+                        region_frequencies[region]['numberOfSigners'] += 1
 
             self.sign_counts[gloss] = {'frequency': self.freqs[gloss], 'numberOfSigners': number_of_signers,
                                     'frequenciesPerRegion': region_frequencies}
