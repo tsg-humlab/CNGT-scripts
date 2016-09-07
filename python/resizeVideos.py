@@ -21,7 +21,7 @@ class VideoResizer:
     Resizes the dimension and duration of a video.
     """
 
-    def __init__(self, video_files, ffmpeg_cmd="ffmpeg", resize_scale=1, frames_begin=0, frames_end=0):
+    def __init__(self, video_files, ffmpeg_cmd="ffmpeg", resize_scale=-1, frames_begin=0, frames_end=-1):
         """
         :param video_files: a list of video file names
         :param ffmpeg_cmd: the ffmpeg command (on Ubuntu it is 'avconv')
@@ -98,25 +98,28 @@ if __name__ == "__main__":
             " -c <ffmpeg command if not 'ffmpeg'> -s <height in pixels> -b <begin frame index>" + \
             " -e <end frame index> [-d] <file|directory ...>"
 
-    opt_list, file_list = getopt.getopt(sys.argv[1:], 'c:s:b:e:d')
+    opt_list, file_list = getopt.getopt(sys.argv[1:], 'c:s:b:e:dh')
 
     ffmpeg_command = "ffmpeg"
-    resize_scale = 1.0
+    resize_scale = -1
     frames_begin = 0
-    frames_end = 0
+    frames_end = -1
     dry_run = False
 
     for opt in opt_list:
         if opt[0] == '-c':
             ffmpeg_command = opt[1]
         if opt[0] == '-s':
-            resize_scale = float(opt[1])
+            resize_scale = int(opt[1])
         if opt[0] == '-b':
             frames_begin = int(opt[1])
         if opt[0] == '-e':
             frames_end = int(opt[1])
         if opt[0] == '-d':
             dry_run = True
+        if opt[0] == '-h':
+            print(usage)
+            exit(0)
 
     resizer = VideoResizer(file_list, ffmpeg_command, resize_scale, frames_begin, frames_end)
     resizer.run(dry_run)
