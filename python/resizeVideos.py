@@ -94,7 +94,9 @@ class VideoResizer:
             Popen(cmd)
 
 if __name__ == "__main__":
-    usage = 
+    usage = "Usage: \n" + sys.argv[0] + \
+            " -c <ffmpeg command if not 'ffmpeg'> -s <height in pixels> -b <begin frame index>" + \
+            " -e <end frame index> [-d] <file|directory ...>"
 
     opt_list, file_list = getopt.getopt(sys.argv[1:], 'c:s:b:e:d')
 
