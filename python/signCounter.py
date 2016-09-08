@@ -55,8 +55,10 @@ class SignCounter:
                 try:
                     self.process_file(f)
                     self.generate_result()
-                except KeyError:
-                    continue
+                except KeyError as ke:
+                    print("KeyError in file %s: '%s'" % (f, ke.args[0]), file=sys.stderr)
+                except:
+                    print("Unexpected error:" + sys.exc_info()[0], file=sys.stderr)
         else:
             print("No EAF files to process.", file=sys.stderr)
 
