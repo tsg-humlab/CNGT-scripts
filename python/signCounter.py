@@ -52,8 +52,11 @@ class SignCounter:
         """ """
         if len(self.all_files) > 0:
             for f in self.all_files:
-                self.process_file(f)
-                self.generate_result()
+                try:
+                    self.process_file(f)
+                    self.generate_result()
+                except KeyError:
+                    continue
         else:
             print("No EAF files to process.", file=sys.stderr)
 
