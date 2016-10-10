@@ -150,7 +150,7 @@ class Metadata2tiers:
         # - at 0
         # - at duration
         time_order = xml.findall("//TIME_ORDER")[0]
-        if not self.time_slots.has_key(0):
+        if 0 not in self.time_slots:
             self.time_slots[0] = 0
             time_order.insert(0, etree.XML('<TIME_SLOT TIME_SLOT_ID="ts%d" TIME_VALUE="%d"/>' % (0, 0)))
 
@@ -162,19 +162,21 @@ class Metadata2tiers:
                                   etree.XML('<TIME_SLOT TIME_SLOT_ID="ts%d" TIME_VALUE="%d"/>'
                                             % (new_last_time_slot_id, duration)))
 
-                # Add new tier
+                # Add new tiers
                 last_tier = xml.findall("//TIER")[-1]
                 parent = last_tier.getparent()
-                new_tier = etree.XML("""
-                    <TIER DEFAULT_LOCALE="en" TIER_ID="Metadata S1" LINGUISTIC_TYPE_REF="remarks">
-                        <ANNOTATION>
-                            <ALIGNABLE_ANNOTATION ANNOTATION_ID="a99999" TIME_SLOT_REF1="ts0" TIME_SLOT_REF2="ts%d">
-                                <ANNOTATION_VALUE>%s</ANNOTATION_VALUE>
-                            </ALIGNABLE_ANNOTATION>
-                        </ANNOTATION>
-                    </TIER>
-                """ % (new_last_time_slot_id, annotation_value))
-                parent.insert(parent.index(last_tier)+1, new_tier)
+                for subject in ("S1", "S2"):
+                    new_tier = etree.XML("""
+                        <TIER DEFAULT_LOCALE="en" TIER_ID="Metadata %s" LINGUISTIC_TYPE_REF="remarks">
+                            <ANNOTATION>
+                                <ALIGNABLE_ANNOTATION ANNOTATION_ID="a99999" TIME_SLOT_REF1="ts0" TIME_SLOT_REF2="ts%d">
+                                    <ANNOTATION_VALUE>%s</ANNOTATION_VALUE>
+                                </ALIGNABLE_ANNOTATION>
+                            </ANNOTATION>
+                        </TIER>
+                    """ % (subject, new_last_time_slot_id, annotation_value))
+                    parent.insert(parent.index(last_tier)+1, new_tier)
+                    last_tier = new_tier
 
         return xml
 
