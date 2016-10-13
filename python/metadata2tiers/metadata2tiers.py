@@ -2,6 +2,8 @@
 
 """
 A class to add metadata tiers in an EAF.
+
+Uses pympi (https://github.com/dopefishh/pympi) for the EAF specific processing.
 """
 
 from __future__ import print_function
@@ -9,26 +11,28 @@ from __future__ import print_function
 import getopt
 import json
 import os
-import re
 import sys
-from lxml import etree
 from urlparse import urlparse
 import subprocess
 from collections import defaultdict
+from pympi.Elan import Eaf
 
 
 class Metadata2tiers:
     def __init__(self, metadata_file, eaf_files, video_dir, output_dir=None, ffprobe_command="ffprobe"):
         self.video_dir = video_dir
-        self.output_dir = output_dir
+        if output_dir:
+            self.output_dir = output_dir.rstrip(os.sep)
+        if not os.path.isdir(self.output_dir):
+            os.mkdir(self.output_dir, 0o750)
         self.ffprobe_command = ffprobe_command
 
+        # Find all files recursively and add to a list
         self.all_files = []
         for f in eaf_files:
             self.add_file(f)
 
-        self.time_slots = {}
-
+        # Read the metadata
         self.metadata = defaultdict(lambda: defaultdict(list))
         self.load_metadata(metadata_file)
 
@@ -52,8 +56,13 @@ class Metadata2tiers:
             print("No such file of directory: " + fname, file=sys.stderr)
 
     def load_metadata(self, metadata_file):
+        """
+        Loads the metadata from the give CSV file.
+        :param metadata_file:
+        :return:
+        """
         with open(metadata_file) as meta:
-            header = meta.readline().rstrip()  # Skip first row (header)
+            header = meta.readline()  # Skip first row (header)
             self.metadata["header"] = header.split("\t")[1:5]
             for line in meta.readlines():
                 fields = line.rstrip().split("\t")
@@ -65,7 +74,9 @@ class Metadata2tiers:
 
         :return:
         """
-        if len(self.all_files) > 0:
+        if not self.metadata:
+            print("No metadata loaded.", file=sys.stderr)
+        elif len(self.all_files) > 0:
             for f in self.all_files:
                 self.process_file(f)
         else:
@@ -73,37 +84,26 @@ class Metadata2tiers:
 
     def process_file(self, file_name):
         """
-        Processes one file. Gloss extraction is called and video extraction is called.
+        Processes one file.
 
         :param file_name:
         :return:
         """
-        with open(file_name) as eaf:
-            xml = etree.parse(eaf)
-            videos = self.extract_video_files(xml)
+
+        try:
+            eaf = Eaf(file_name)
+            videos = [os.path.basename(urlparse(media_descriptors['MEDIA_URL']).path)
+                      for media_descriptors in eaf.media_descriptors
+                      if media_descriptors['MIME_TYPE'] == 'video/mpeg']
             duration = self.find_max_duration(videos)
-            self.extract_time_slots(xml)
-            annotation_values = self.create_annotation_values(file_name)
-            new_xml = self.add_new_annotation(xml, annotation_values, duration)
-            print(etree.tostring(new_xml, pretty_print=True))
-
-    def extract_video_files(self, xml):
-        """
-        Extracts video file url from the EAF XML.
-
-        :param xml: the EAF XML
-        :return: videos dictionary (key: participant code, value: video url)
-        """
-        videos = {}
-        for media_descriptor in xml.findall("//MEDIA_DESCRIPTOR"):
-            media_url = media_descriptor.attrib["MEDIA_URL"]
-            url = urlparse(media_url)
-            video_file = os.path.basename(url.path)
-            match = re.match(r'^(CNGT\d{4}_(S\d{3})_b.mpg)$', video_file)
-            if match:
-                videos[match.group(1)] = video_file
-
-        return videos
+            if duration == 0.0:
+                print("Duration could not be determined.", file=sys.stderr)
+            else:
+                annotation_values = self.create_annotation_values(file_name)
+                self.add_new_annotations(eaf, annotation_values, duration)
+                eaf.to_file(self.output_dir + os.sep + os.path.basename(urlparse(file_name).path), pretty=True)
+        except IOError:
+            print("The EAF %s could not be processed." % file_name, file=sys.stderr)
 
     def find_max_duration(self, videos):
         max_duration = 0.0
@@ -122,18 +122,6 @@ class Metadata2tiers:
 
         return int(max_duration * 1000)
 
-    def extract_time_slots(self, xml):
-        """
-        Extracts time slots from the EAF XML.
-
-        :param xml: the EAF XML
-        :return:
-        """
-        self.time_slots = {}
-        for time_slot in xml.findall("//TIME_SLOT"):
-            time_slot_id = int(time_slot.attrib['TIME_SLOT_ID'][2:])
-            self.time_slots[time_slot_id] = time_slot.attrib['TIME_VALUE']
-
     def create_annotation_values(self, file_name):
         url = urlparse(file_name)
         basename = os.path.basename(url.path)
@@ -144,41 +132,12 @@ class Metadata2tiers:
                                          for x in zip(self.metadata["header"], metadata)
                                     )
         return annotation_value
-
-    def add_new_annotation(self, xml, annotation_value, duration):
-        # Add new time slots:
-        # - at 0
-        # - at duration
-        time_order = xml.findall("//TIME_ORDER")[0]
-        if 0 not in self.time_slots:
-            self.time_slots[0] = 0
-            time_order.insert(0, etree.XML('<TIME_SLOT TIME_SLOT_ID="ts%d" TIME_VALUE="%d"/>' % (0, 0)))
-
-            if duration not in self.time_slots.values():
-                new_last_time_slot_id = sorted(self.time_slots.keys())[-1] + 1
-                print("LAST TIME SLOT ID: " + str(new_last_time_slot_id), file=sys.stderr)
-                self.time_slots[new_last_time_slot_id] = duration
-                time_order.insert(new_last_time_slot_id + 1,
-                                  etree.XML('<TIME_SLOT TIME_SLOT_ID="ts%d" TIME_VALUE="%d"/>'
-                                            % (new_last_time_slot_id, duration)))
-
-                # Add new tiers
-                last_tier = xml.findall("//TIER")[-1]
-                parent = last_tier.getparent()
-                for subject in ("S1", "S2"):
-                    new_tier = etree.XML("""
-                        <TIER DEFAULT_LOCALE="en" TIER_ID="Metadata %s" LINGUISTIC_TYPE_REF="remarks">
-                            <ANNOTATION>
-                                <ALIGNABLE_ANNOTATION ANNOTATION_ID="a99999" TIME_SLOT_REF1="ts0" TIME_SLOT_REF2="ts%d">
-                                    <ANNOTATION_VALUE>%s</ANNOTATION_VALUE>
-                                </ALIGNABLE_ANNOTATION>
-                            </ANNOTATION>
-                        </TIER>
-                    """ % (subject, new_last_time_slot_id, annotation_value))
-                    parent.insert(parent.index(last_tier)+1, new_tier)
-                    last_tier = new_tier
-
-        return xml
+        
+    def add_new_annotations(self, eaf, annotation_values, duration):
+        for subject in ("S1", "S2"):
+            tier_name = "Metadata " + subject
+            eaf.add_tier(tier_name, ling="remarks", locale="en")
+            eaf.add_annotation(tier_name, 0, duration, value=annotation_values)
 
 
 if __name__ == "__main__":
@@ -186,8 +145,10 @@ if __name__ == "__main__":
     # -v Directory containing video files
     # -o Output directory; optional
     usage = "Usage: \n" + sys.argv[0] + \
-            "-c <ffprobe command if not ffprobe> -v <video directory> -o <output directory>" + \
-            "-m <metadata file>"
+            " -c <ffprobe command if not ffprobe>"\
+            " -v <video directory>" + \
+            " -o <output directory>" + \
+            " -m <metadata file>"
 
     # Set default values
     ffprobe_command = "ffprobe"
@@ -233,6 +194,6 @@ if __name__ == "__main__":
         print("Output directory: " + output_dir, file=sys.stderr)
     print("Metadata file: " + metadata_file, file=sys.stderr)
 
-    # Built and run
+    # Build and run
     metadata2tiers = Metadata2tiers(metadata_file, file_list, video_dir, output_dir, ffprobe_command)
     metadata2tiers.run()
