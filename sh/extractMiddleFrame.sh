@@ -1,0 +1,1 @@
+/home/micha/software/my/sh/extractMiddleFrame.sh
