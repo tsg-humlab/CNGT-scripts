@@ -10,16 +10,16 @@ import getopt
 from urlparse import urlparse
 import os
 import sys
-from shutil import copyfile
+from shutil import copyfile, rmtree
 from subprocess import Popen
 from math import floor
 
 __author__ = "Micha Hulsbosch"
 __date__ = "October 2016"
 
+
 class MiddleFrameExtracter:
     """
-    Resizes the dimension and duration of a video.
 
 
     """
@@ -45,11 +45,17 @@ class MiddleFrameExtracter:
         :param dry_run: if true, do not run the actual resizing, only output the used command
         :return:
         """
+        middle_frame_dirs = []
         for video_file in self.video_files:
-            print("Video file: " + video_file)
+            print("Video file: " + video_file, file=sys.stderr)
             dirs = self.create_dirs(video_file)
+            middle_frame_dirs.append(dirs[1])
             self.extract_frames(video_file, dry_run, dirs)
             self.create_video_stills(video_file, dry_run, dirs)
+            if self.delete_frames:
+                rmtree(dirs[0])
+
+        return middle_frame_dirs
 
     def create_dirs(self, video_file):
         new_dirs = []
@@ -68,6 +74,7 @@ class MiddleFrameExtracter:
 
         cmd = [
             self.ffmpeg_cmd,
+            "-v", "quiet",
             "-i", video_file,
             "-filter:v", scale_formula,
             output_file
@@ -140,4 +147,4 @@ if __name__ == "__main__":
             exit(0)
 
     resizer = MiddleFrameExtracter(file_list, output_dir, ffmpeg_command, delete_frames)
-    resizer.run(dry_run)
+    print(", ".join(resizer.run(dry_run)))

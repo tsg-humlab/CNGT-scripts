@@ -83,6 +83,7 @@ class VideoResizer:
         output_file = video_file.replace(".mp4", "_small.mp4")
 
         cmd = [self.ffmpeg_cmd,
+               "-v", "quiet",
                "-i", video_file,
                "-ss", str(begin_time),
                "-t", str(end_time - begin_time),
