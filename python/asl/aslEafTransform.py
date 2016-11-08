@@ -111,7 +111,7 @@ class AslEafTransformer:
 
     def get_annotation_appendix(self, value):
         # Handle the non splitting cases first
-        match_object = re.match(r'(IX|POSS|HONORIFIC)\(self\)', value)
+        match_object = re.match(r'(IX|POSS|HONORIFIC|SELF)\(self\)', value)
         if match_object is not None:
             new_value = value.replace('(self)', '_1')
             return value, None
@@ -129,7 +129,7 @@ class AslEafTransformer:
                                    # whatever is included in the square brackets should all go on the
                                    # relevant append tier
 
-            r'(FS|NS|IX|POSS|HONORIFIC|IXtracing)(\(.*?\))',  # fingerspelling, depicting signs, etc
+            r'(FS|NS|IX|POSS|HONORIFIC|IXtracing|SELF)(\(.*?\))',  # fingerspelling, depicting signs, etc
 
             # The DS stuff (a shorter regex would mess up the match group indexes below)
             r'(DS_1|DS_2|DS_3|DS_4|DS_5|DS_a|DS_b|DS_b2|DS_b5|DS_bl|DS_bo|DS_c|DS_cx|DS_e)(\(.*?\))',
