@@ -90,7 +90,8 @@ class AslEafTransformer:
     def add_gloss_tier_children(self, eaf, gloss_tiers, gloss_append_lingtype):
         for tier in gloss_tiers:
             child_tier = tier.replace("left hand", "LH").replace("right hand", "RH") + " append"
-            eaf.add_tier(child_tier, parent=tier, ling=gloss_append_lingtype)
+            participant = eaf.get_parameters_for_tier(tier)['PARTICIPANT']
+            eaf.add_tier(child_tier, parent=tier, ling=gloss_append_lingtype, part=participant)
 
             # Extract annotation appendices and put them on the child tier
             #annotations = eaf.get_annotation_data_for_tier(tier)
@@ -110,42 +111,60 @@ class AslEafTransformer:
                     eaf.add_ref_annotation(child_tier, tier, time, appendix)
 
     def get_annotation_appendix(self, value):
-        # Handle the non splitting cases first
-        match_object = re.match(r'(IX|POSS|HONORIFIC|SELF)\(self\)', value)
-        if match_object is not None:
-            new_value = value.replace('(self)', '_1')
-            return value, None
-
-        # Handle the splitting cases
-
         # All possible appendices
         regexes = [
-            r'(.*?)(\/{1,2})',  # / or //
-            r'(.*?)(\[\/{1,3}\])',  # [/] or [//] or [///]
-            r'(.*?)(\[[_\+\?]\])',  # [_] or [+] or [?]
-            r'(.*?)(\.{3})',  # ...
-            r'(.*?)(#)',  # #
-            r'(.*?)(\[=\?.*?\])',  # [=?ALTERNATIVE] note that 'ALTERNATIVE' is replaced by some gloss;
+            r'^\s*(.*?)(\/{1,2})\s*$',  # / or //
+            r'^\s*(.*?)(\[\/{1,3}\])\s*$',  # [/] or [//] or [///]
+            r'^\s*(.*?)(\[[_\+\?]\])\s*$',  # [_] or [+] or [?]
+            r'^\s*(.*?)(\.{3})\s*$',  # ...
+            r'^\s*(.*?)(#)\s*$',  # #
+            r'^\s*(.*?)(\[=\?.*?\])\s*$',  # [=?ALTERNATIVE] note that 'ALTERNATIVE' is replaced by some gloss;
                                    # whatever is included in the square brackets should all go on the
                                    # relevant append tier
 
-            r'(FS|NS|IX|POSS|HONORIFIC|IXtracing|SELF)(\(.*?\))',  # fingerspelling, depicting signs, etc
+            r'^\s*(FS|NS|IX|POSS|HONORIFIC|IXtracing|SELF)(\(.*?\))\s*$',  # fingerspelling, depicting signs, etc
 
             # The DS stuff (a shorter regex would mess up the match group indexes below)
-            r'(DS_1|DS_2|DS_3|DS_4|DS_5|DS_a|DS_b|DS_b2|DS_b5|DS_bl|DS_bo|DS_c|DS_cx|DS_e)(\(.*?\))',
-            r'(DS_f5|DS_fc|DS_fo|DS_g|DS_h|DS_i|DS_L|DS_of|DS_oh|DS_s|DS_t|DS_x|DS_y|DS\(ca\))(\(.*?\))',
+            r'^\s*(DS_1|DS_2|DS_3|DS_4|DS_5|DS_a|DS_b|DS_b2|DS_b5|DS_bl|DS_bo|DS_c|DS_cx|DS_e)(\(.*?\))\s*$',
+            r'^\s*(DS_f5|DS_fc|DS_fo|DS_g|DS_h|DS_i|DS_L|DS_of|DS_oh|DS_s|DS_t|DS_x|DS_y|DS\(ca\))(\(.*?\))\s*$',
         ]
 
+        doMatch = True
         first_part = value
         second_part = ""
-        for regex in regexes:
-            match_object = re.match(regex, first_part)
-            if match_object is not None:
-                if len(match_object.groups()) == 2:
-                    # Move suffix to second part
-                    first_part = match_object.groups()[0]
-                    second_part = match_object.groups()[1] + second_part
 
+        while doMatch:
+            print("First part: " + first_part + "    Second part: " + second_part)
+
+            # Non splitting case
+            match_object = re.match(r'^(IX|POSS|HONORIFIC|SELF)\(self\)$', first_part)
+            if match_object is not None:
+                print("Matched ^\s*(IX|POSS|HONORIFIC|SELF)\(self\)\s*$")
+                first_part = first_part.replace('(self)', '_1')
+                doMatch = False
+                continue
+
+            # Splitting cases
+            for regex in regexes:
+                print("Regex: " + regex)
+                match_object = re.match(regex, first_part)
+                if match_object is not None:
+                    print("Match!")
+                    if len(match_object.groups()) == 2:
+                        # Move suffix to second part
+                        first_part = match_object.groups()[0]
+                        second_part = match_object.groups()[1] + second_part
+                    break
+            else:
+                doMatch = False
+
+                # Non splitting case
+                match_object = re.match(r'^(IX|POSS|HONORIFIC|SELF)\(self\)$', first_part)
+                if match_object is not None:
+                    print("Matched ^\s*(IX|POSS|HONORIFIC|SELF)\(self\)\s*$")
+                    first_part = first_part.replace('(self)', '_1')
+
+        print("\t".join(["Result:", value, first_part, second_part]))
         return first_part, second_part
 
 if __name__ == "__main__":
