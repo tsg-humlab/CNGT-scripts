@@ -73,7 +73,7 @@ class AslEafTransformer:
             eaf = Eaf(file_name)
             eaf.add_linguistic_type(gloss_append_lingtype, constraints="Symbolic_Association")
             gloss_tiers = self.find_gloss_tiers(eaf)
-            self.add_gloss_tier_children(eaf, gloss_tiers, gloss_append_lingtype)
+            self.add_gloss_tier_children(eaf, gloss_tiers, gloss_append_lingtype, file_name)
             eaf.to_file(self.output_dir + os.sep + os.path.basename(urlparse(file_name).path), pretty=True)
         except IOError:
             print("The EAF %s could not be processed." % file_name, file=sys.stderr)
@@ -87,10 +87,14 @@ class AslEafTransformer:
                 gloss_tiers.append(name)
         return gloss_tiers
 
-    def add_gloss_tier_children(self, eaf, gloss_tiers, gloss_append_lingtype):
+    def add_gloss_tier_children(self, eaf, gloss_tiers, gloss_append_lingtype, file_name):
         for tier in gloss_tiers:
             child_tier = tier.replace("left hand", "LH").replace("right hand", "RH") + " append"
-            participant = eaf.get_parameters_for_tier(tier)['PARTICIPANT']
+            tier_parameters = eaf.get_parameters_for_tier(tier)
+            if 'PARTICIPANT' in tier_parameters:
+                participant = tier_parameters['PARTICIPANT']
+            else:
+                participant = ''
             eaf.add_tier(child_tier, parent=tier, ling=gloss_append_lingtype, part=participant)
 
             # Extract annotation appendices and put them on the child tier
@@ -102,15 +106,17 @@ class AslEafTransformer:
                 time = (eaf.timeslots[annotation[1]] + eaf.timeslots[annotation[0]])/2
 
                 value = annotation[2]
-                (new_value, appendix) = self.get_annotation_appendix(value)
+                (new_value, appendix) = self.get_annotation_appendix(value, file_name)
 
-                if appendix:
+                if new_value is not value:
                     # Change annotation value on parent tier
                     eaf.tiers[tier][0][annotation_id] = (annotation[0], annotation[1], new_value, annotation[3])
+
+                if appendix:
                     # Add a new annotation on the child tier
                     eaf.add_ref_annotation(child_tier, tier, time, appendix)
 
-    def get_annotation_appendix(self, value):
+    def get_annotation_appendix(self, value, file_name):
         # All possible appendices
         regexes = [
             r'^\s*(.*?)(\/{1,2})\s*$',  # / or //
@@ -122,7 +128,7 @@ class AslEafTransformer:
                                    # whatever is included in the square brackets should all go on the
                                    # relevant append tier
 
-            r'^\s*(FS|NS|IX|POSS|HONORIFIC|IXtracing|SELF)(\(.*?\))\s*$',  # fingerspelling, depicting signs, etc
+            r'^\s*(FS|NS|IX|IXarc|POSS|HONORIFIC|IXtracing|SELF)(\(.*?\))\s*$',  # fingerspelling, depicting signs, etc
 
             # The DS stuff (a shorter regex would mess up the match group indexes below)
             r'^\s*(DS_1|DS_2|DS_3|DS_4|DS_5|DS_a|DS_b|DS_b2|DS_b5|DS_bl|DS_bo|DS_c|DS_cx|DS_e)(\(.*?\))\s*$',
@@ -134,7 +140,7 @@ class AslEafTransformer:
         second_part = ""
 
         while doMatch:
-            print("First part: " + first_part + "    Second part: " + second_part)
+            print("First part: " + first_part.encode('utf-8') + "    Second part: " + second_part.encode('utf-8'))
 
             # Non splitting case
             match_object = re.match(r'^(IX|POSS|HONORIFIC|SELF)\(self\)$', first_part)
@@ -164,7 +170,8 @@ class AslEafTransformer:
                     print("Matched ^\s*(IX|POSS|HONORIFIC|SELF)\(self\)\s*$")
                     first_part = first_part.replace('(self)', '_1')
 
-        print("\t".join(["Result:", value, first_part, second_part]))
+        print("\t".join(["Result (file, original, new, appendix):", file_name, value.encode('utf-8'),
+                         first_part.encode('utf-8'), second_part.encode('utf-8')]))
         return first_part, second_part
 
 if __name__ == "__main__":
