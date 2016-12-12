@@ -80,7 +80,8 @@ class VideoResizer:
         # scale_formula = "scale='trunc(iw*max(1,sar)/%f)*2':'trunc(ih*max(1,1/sar)/%f)*2'" \
         #                     % (1/self.resize_scale * 2, 1/self.resize_scale * 2)
         scale_formula = "scale=(trunc((iw/(ih/%f))/2+0.5))*2:%f" % (self.resize_scale, self.resize_scale)
-        output_file = video_file.replace(".mp4", "_small.mp4")
+        path, ext = os.path.splitext(video_file)
+        output_file = path + "_small" + ext
 
         cmd = [self.ffmpeg_cmd,
                "-v", "quiet",
