@@ -33,7 +33,7 @@ class GlossExtractor:
     Extracts video fragments for glosses from CNGT EAFs.
     """
 
-    def __init__(self, files, video_directory, gloss_directory, min_overlap=0, extra_time=0, ffmpeg_cmd='ffmpeg'):
+    def __init__(self, files, video_directory, gloss_directory, min_overlap=0, extra_time=0, ffmpeg_cmd='ffmpeg', video_extension_replacement="", header_time=0):
         """
         :param files: list of EAF files / directories containing EAF files
         :param min_overlap: minimal overlap for two handed signs
@@ -56,11 +56,14 @@ class GlossExtractor:
 
         self.ffmpeg_cmd = ffmpeg_cmd
 
+        self.video_extension_replacement = video_extension_replacement
+        self.header_time = header_time
+
+        self.dry_run = False
+
         self.all_files = []
         for f in files:
             self.add_file(f)
-
-        self.time_slots = {}
 
     def add_file(self, fname):
         """
@@ -81,12 +84,13 @@ class GlossExtractor:
         else:
             print("No such file of directory: " + fname, file=sys.stderr)
 
-    def run(self):
+    def run(self, dry_run=False):
         """
         For each file in the list of files, processing is started.
 
         :return:
         """
+        self.dry_run = dry_run
         if len(self.all_files) > 0:
             for f in self.all_files:
                 self.process_file(f)
@@ -103,8 +107,8 @@ class GlossExtractor:
         with open(file_name) as eaf:
             xml = etree.parse(eaf)
             videos = self.extract_video_files(xml)
-            self.extract_time_slots(xml)
-            (list_of_glosses, tier_id_prefix) = self.extract_glosses(xml)
+            time_slots = self.extract_time_slots(xml)
+            (list_of_glosses, tier_id_prefix) = self.extract_glosses(xml, time_slots)
 
             self.extract_glosses_from_videos(file_name, list_of_glosses, videos)
 
@@ -133,12 +137,13 @@ class GlossExtractor:
         :param xml: the EAF XML
         :return:
         """
-        self.time_slots = {}
+        time_slots = {}
         for time_slot in xml.findall("//TIME_SLOT"):
             time_slot_id = time_slot.attrib['TIME_SLOT_ID']
-            self.time_slots[time_slot_id] = time_slot.attrib['TIME_VALUE']
+            time_slots[time_slot_id] = time_slot.attrib['TIME_VALUE']
+        return time_slots
 
-    def extract_glosses(self, xml):
+    def extract_glosses(self, xml, time_slots):
         """
         Extracts glosses from the EAF XML.
 
@@ -164,8 +169,8 @@ class GlossExtractor:
                 for annotation in tier.findall("ANNOTATION/ALIGNABLE_ANNOTATION"):
                     annotation_id = annotation.attrib['ANNOTATION_ID']
                     annotation_data = {
-                        "begin": int(self.time_slots[annotation.attrib['TIME_SLOT_REF1']]),
-                        "end": int(self.time_slots[annotation.attrib['TIME_SLOT_REF2']]),
+                        "begin": int(time_slots[annotation.attrib['TIME_SLOT_REF1']]) - self.header_time,
+                        "end": int(time_slots[annotation.attrib['TIME_SLOT_REF2']]) - self.header_time,
                         "id": annotation_id,
                         "value": annotation.find("ANNOTATION_VALUE").text,
                         "participant": participant,
@@ -241,21 +246,35 @@ class GlossExtractor:
         value = re.sub(r'[/\?<>\\:\*\|]', '__', gloss["value"])
         f = re.sub(r'\.eaf$', '', os.path.basename(urlparse(fname).path))
 
-        new_video_file = "_".join([f, participant, str(gloss["begin"]), str(gloss["end"]) + ".mpg"])
+        new_video_file = "_".join([f, participant, str(gloss["begin"]), str(gloss["end"]) + ".mp4"])
 
         output_dir = self.gloss_directory + os.sep + value
         if not os.path.exists(output_dir):
             #print("mkdir -p " + output_dir)
             os.makedirs(output_dir)
 
+        video_file_path = (self.video_directory + os.sep + video)\
+
+        if self.video_extension_replacement != "":
+            video_file_path = re.sub(r'\.\w+$', '.' + self.video_extension_replacement, video_file_path)
+
         cmd = [self.ffmpeg_cmd,
-               "-i", self.video_directory + os.sep + video,
+               "-i", video_file_path,
+               "-vf", "yadif",
                "-ss", start,
                "-t", duration,
-               "-c",  "copy",
+               "-vcodec",  "h264",
+               "-strict", "experimental",
                output_dir + os.sep + new_video_file]
-        print(" ".join(cmd))
-        Popen(cmd)
+
+        cmd_print = cmd[:]
+        # The following is only necessary if the printed command is copied to a command line to run
+        cmd_print[2] = video_file_path.replace(' ', '\\\ ')
+        print(" ".join(cmd_print))
+
+        if not self.dry_run:
+            process = Popen(cmd)
+            process.wait()
 
 
 def has_overlap(first, second, min_overlap=0):
@@ -282,18 +301,21 @@ def has_overlap(first, second, min_overlap=0):
 if __name__ == "__main__":
     usage = "Usage: \n" + sys.argv[0] + \
             " -c <ffmpeg command if not 'ffmpeg'> -o <minimal overlap> -t <extra time at beginning and end> " \
-            "-v <video directory> -g <gloss output directory> <file|directory ...>"
+            "-v <video directory> -g <gloss output directory> [-e <video extension replacement>] [-h <header time>] [-d] <file|directory ...>"
     errors = []
     # -o Minimal overlap in ms; optional
     # -t Extra time at beginning and end of fragment, in ms; optional
     # -v Directory containing video files
-    opt_list, file_list = getopt.getopt(sys.argv[1:], 'c:g:o:t:v:')
+    opt_list, file_list = getopt.getopt(sys.argv[1:], 'c:g:o:t:v:e:h:d')
 
     ffmpeg_command = "ffmpeg"
     gloss_dir = None
     minimal_overlap = 0 # default 0
     time_begin_end = 0 # default 0
     video_dir = None
+    video_extension_replacement = ""
+    header_time = 0
+    dry_run = False
 
     for opt in opt_list:
         if opt[0] == '-c':
@@ -306,6 +328,12 @@ if __name__ == "__main__":
             time_begin_end = int(opt[1])
         if opt[0] == '-v':
             video_dir = opt[1]
+        if opt[0] == '-e':
+            video_extension_replacement = opt[1]
+        if opt[0] == '-h':
+            header_time = int(opt[1])
+        if opt[0] == '-d':
+            dry_run = True
 
     if gloss_dir is None or len(gloss_dir) == 0:
         errors.append("No gloss output directory given")
@@ -330,5 +358,5 @@ if __name__ == "__main__":
     print("Gloss output directory: " + gloss_dir, file=sys.stderr)
     print("ffmpeg command: " + ffmpeg_command, file=sys.stderr)
 
-    gloss_extractor = GlossExtractor(file_list, video_dir, gloss_dir, minimal_overlap, time_begin_end, ffmpeg_command)
-    gloss_extractor.run()
+    gloss_extractor = GlossExtractor(file_list, video_dir, gloss_dir, minimal_overlap, time_begin_end, ffmpeg_command, video_extension_replacement, header_time)
+    gloss_extractor.run(dry_run)

@@ -3,7 +3,6 @@
 # This is a rewrite of the perl script
 # signCounter.pl
 
-from __future__ import print_function
 
 import getopt
 import json
@@ -23,7 +22,7 @@ class SignCounter:
 
         self.freqs = defaultdict(lambda: 0)
         self.freqsPerPerson = defaultdict(lambda: defaultdict(int))
-        self.freqsPerRegion = defaultdict(lambda: defaultdict(int))
+        self.freqsPerRegion = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
         for f in files:
             self.add_file(f)
@@ -31,15 +30,15 @@ class SignCounter:
         self.load_metadata(metadata_file)
 
     def add_file(self, fname):
-        if fname.endswith(".eaf"):
-            if os.path.isfile(fname):
+        if os.path.isfile(fname):
+            if fname.endswith(".eaf"):
                 self.all_files.append(fname)
-            elif os.path.isdir(fname):
-                files_in_dir = os.listdir(fname)
-                for f in files_in_dir:
-                    self.add_file(f)
-            else:
-                print("No such file of directory: " + fname, file=sys.stderr)
+        elif os.path.isdir(fname):
+            files_in_dir = os.listdir(fname)
+            for f in files_in_dir:
+                self.add_file(fname + os.sep + f)
+        else:
+            sys.stderr.write("No such file of directory: %s\n" % fname)
 
     def load_metadata(self, metadata_file):
         with open(metadata_file) as meta:
@@ -52,13 +51,18 @@ class SignCounter:
         """ """
         if len(self.all_files) > 0:
             for f in self.all_files:
-                self.process_file(f)
-                self.generate_result()
+                try:
+                    self.process_file(f)
+                    self.generate_result()
+                except KeyError as ke:
+                    sys.stderr.write("KeyError in file %s: '%s'\n" % (f, ke.args[0]))
+                # except:
+                #     sys.stderr.write("Unexpected error: %s %s\n" % (str(sys.exc_info()[0]), str(sys.exc_info()[1])))
         else:
-            print("No EAF files to process.", file=sys.stderr)
+            sys.stderr.write("No EAF files to process.\n")
 
     def process_file(self, fname):
-        with open(fname) as eaf:
+        with open(fname, encoding="utf-8") as eaf:
             xml = etree.parse(eaf)
             self.extract_time_slots(xml)
             (list_of_glosses, tier_id_prefix) = self.extract_glosses(xml)
@@ -81,8 +85,11 @@ class SignCounter:
             if match and ('PARENT_REF' not in tier.attrib or tier.attrib['PARENT_REF'] == ''):
                 tier_id_prefix = match.group(1)
                 hand = match.group(2)
-                participant = tier.attrib['PARTICIPANT']
-                list_of_glosses[tier_id]["participant"] = participant
+
+                participant = ""
+                if 'PARTICIPANT' in tier.attrib:
+                    participant = tier.attrib['PARTICIPANT']
+                    list_of_glosses[tier_id]["participant"] = participant
                 list_of_glosses[tier_id]["annotations"] = []
 
                 for annotation in tier.findall("ANNOTATION/ALIGNABLE_ANNOTATION"):
@@ -163,7 +170,7 @@ class SignCounter:
                 except TypeError:
                     pass
 
-                if not gloss == '':
+                if gloss is not None and not gloss == '':
                     tmp[gloss]['participants'][annotation['participant']] += 1
 
             for gloss in tmp:
@@ -173,7 +180,7 @@ class SignCounter:
                     self.freqsPerPerson[person][gloss] += 1
 
                     region = self.metadata[person]
-                    self.freqsPerRegion[region][gloss] += 1
+                    self.freqsPerRegion[region][person][gloss] += 1
 
     def generate_result(self):
         number_of_tokens = 0
@@ -195,10 +202,13 @@ class SignCounter:
                     number_of_signers += 1
 
             # Region frequencies
-            region_frequencies = {}
+            region_frequencies = defaultdict(lambda: defaultdict(int))
             for region in sorted(self.freqsPerRegion.keys()):
-                if gloss in self.freqsPerRegion[region]:
-                    region_frequencies[region] = self.freqsPerRegion[region][gloss]
+                # region_frequencies[region]['frequency'] = 0
+                for person in sorted(self.freqsPerRegion[region].keys()):
+                    if gloss in self.freqsPerRegion[region][person]:
+                        region_frequencies[region]['frequency'] += self.freqsPerRegion[region][person][gloss]
+                        region_frequencies[region]['numberOfSigners'] += 1
 
             self.sign_counts[gloss] = {'frequency': self.freqs[gloss], 'numberOfSigners': number_of_signers,
                                     'frequenciesPerRegion': region_frequencies}
