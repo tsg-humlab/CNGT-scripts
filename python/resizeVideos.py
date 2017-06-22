@@ -58,7 +58,6 @@ class VideoResizer:
         """
         probe_cmd = self.ffmpeg_cmd[0:2] + "probe"
         cmd = [probe_cmd, "-of", "json", "-show_streams", video_file]
-        print(cmd)
 
         with open(os.devnull, 'w') as devnull:
             p = Popen(cmd, stdout=PIPE, stderr=devnull)
