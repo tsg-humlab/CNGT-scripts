@@ -58,10 +58,12 @@ class VideoResizer:
         """
         probe_cmd = self.ffmpeg_cmd[0:2] + "probe"
         cmd = [probe_cmd, "-of", "json", "-show_streams", video_file]
+        print(cmd)
 
         with open(os.devnull, 'w') as devnull:
             p = Popen(cmd, stdout=PIPE, stderr=devnull)
-            properties = json.loads(p.communicate()[0])
+            json_string = p.communicate()[0].decode()
+            properties = json.loads(json_string)
             for stream in properties["streams"]:
                 if stream["codec_type"] == "video":
                     frame_rate = float(Fraction(stream["avg_frame_rate"]))

@@ -7,7 +7,7 @@ This script will resize video dimensions and delete frames from beginning and en
 from __future__ import print_function
 
 import getopt
-from urlparse import urlparse
+from urllib.parse import urlparse
 import os
 import sys
 from shutil import copyfile, rmtree
