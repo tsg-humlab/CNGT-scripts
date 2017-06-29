@@ -12,13 +12,26 @@ import os
 from pympi.Elan import Eaf
 from urlparse import urlparse
 
+# SETTINGS
+# Parameters for the lexicon reference
+LEXICON_REF = "signbank-lexicon-ref"
+NAME = "NGT-Signbank"
+TYPE = "Signbank"
+URL = "https://signbank.science.ru.nl/"
+LEXICON_ID = "NGT"
+LEXICON_NAME = "NGT"
+DATCAT_ID = "Annotation Id Gloss"
+DATCAT_NAME = "Annotation Id Gloss"
+# Linguistic type id
+LINGUISTIC_TYPE_ID = "gloss"
+
 
 class LexiconLinkAdder:
     def __init__(self, eaf_files, output_dir=None):
         if output_dir:
             self.output_dir = output_dir.rstrip(os.sep)
-        if not os.path.isdir(self.output_dir):
-            os.mkdir(self.output_dir, 0o750)
+            if not os.path.isdir(self.output_dir):
+                os.mkdir(self.output_dir, 0o750)
 
         # Find all files recursively and add to a list
         self.all_files = []
@@ -65,10 +78,9 @@ class LexiconLinkAdder:
         """
         try:
             eaf = Eaf(file_name)
-            lex_ref = "signbank-lexicon-ref"
-            eaf.add_lexicon_ref(lex_ref, "NGT-Signbank", "Signbank", "https://signbank.science.ru.nl/",
-                                "NGT", "NGT", "Annotation Id Gloss", "Annotation Id Gloss")
-            eaf.linguistic_types["gloss"]["LEXICON_REF"] = lex_ref
+            eaf.add_lexicon_ref(LEXICON_REF, NAME, TYPE, URL,
+                                LEXICON_ID, LEXICON_NAME, DATCAT_ID, DATCAT_NAME)
+            eaf.linguistic_types[LINGUISTIC_TYPE_ID]["LEXICON_REF"] = LEXICON_REF
 
             eaf.to_file(self.output_dir + os.sep + os.path.basename(urlparse(file_name).path), pretty=True)
         except IOError:
