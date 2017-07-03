@@ -14,6 +14,8 @@ from filecollectionprocessing.fileprocessor import FileProcessor
 
 
 class EafProcessor(FileProcessor):
+    _extensions = ["eaf"]
+
     def process_file(self, file_name):
         """
         Processes one file.
@@ -31,3 +33,6 @@ class EafProcessor(FileProcessor):
 
     def process_eaf(self, eaf, file_name):
         pass
+
+    def get_extensions(self):
+        return self._extensions

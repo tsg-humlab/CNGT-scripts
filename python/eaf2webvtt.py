@@ -153,7 +153,7 @@ if __name__ == "__main__":
         print("Output directory: " + output_dir, file=sys.stderr)
 
     # Build and run
-    file_collection_processor = FileCollectionProcessor(file_list, output_dir)
+    file_collection_processor = FileCollectionProcessor(file_list, output_dir=output_dir, extensions_to_process=["eaf"])
     eafToWebVttTransformer = EafToWebVttTransformer()
-    file_collection_processor.add_file_processor(eafToWebVttTransformer, "eaf")
+    file_collection_processor.add_file_processor(eafToWebVttTransformer)
     file_collection_processor.run()

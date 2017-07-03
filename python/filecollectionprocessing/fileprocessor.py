@@ -13,3 +13,6 @@ class FileProcessor:
 
     def set_output_dir(self, output_dir):
         self.output_dir = output_dir
+
+    def get_extensions(self):
+        pass
