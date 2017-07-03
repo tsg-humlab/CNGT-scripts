@@ -8,7 +8,8 @@ and turn it into a webvtt.
 
 import sys, getopt, os
 from webvtt import WebVTT, Caption
-from EafProcessor import EafProcessor
+from filecollectionprocessing.filecollectionprocessor import FileCollectionProcessor
+from filecollectionprocessing.eafprocessor import EafProcessor
 
 
 class EafToWebVttTransformer(EafProcessor):
@@ -152,5 +153,7 @@ if __name__ == "__main__":
         print("Output directory: " + output_dir, file=sys.stderr)
 
     # Build and run
-    eafToWebVttTransformer = EafToWebVttTransformer(file_list, output_dir)
-    eafToWebVttTransformer.run()
+    file_collection_processor = FileCollectionProcessor(file_list, output_dir)
+    eafToWebVttTransformer = EafToWebVttTransformer()
+    file_collection_processor.add_file_processor(eafToWebVttTransformer, "eaf")
+    file_collection_processor.run()

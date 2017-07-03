@@ -1,19 +1,18 @@
 #!/usr/bin/python
 
 """
-Abstract class that can be used to process EAF files
+Abstract class that can be used to process a collection of files
 """
 
 from __future__ import print_function
 
 import sys
-import getopt
 import os
-from pympi.Elan import Eaf
-from urllib.parse import urlparse
+
+from filecollectionprocessing.fileprocessor import FileProcessor
 
 
-class EafProcessor:
+class FileCollectionProcessor:
     def __init__(self, eaf_files, output_dir=None, **kwargs):
         self.settings = kwargs
 
@@ -31,6 +30,8 @@ class EafProcessor:
         self.all_files = []
         for f in eaf_files:
             self.add_file(f)
+
+        self.file_processors = {}
 
     def add_file(self, fname):
         """
@@ -51,6 +52,26 @@ class EafProcessor:
         else:
             print("No such file of directory: " + fname, file=sys.stderr)
 
+    def add_file_processor(self, file_processor, extension):
+        """
+        Adds a file processor to the collection of file processors
+        :param file_processor: 
+        :param extension: 
+        :return: 
+        """
+        if not isinstance(file_processor, FileProcessor):
+            raise TypeError("file_processor must have type FileProcessor")
+        if not isinstance(extension, str):
+            raise TypeError("file_processor must have type str")
+
+        file_processor.set_output_dir(self.output_dir)
+
+        if extension not in self.file_processors:
+            self.file_processors[extension] = [file_processor]
+        else:
+            self.file_processors[extension].append(file_processor)
+
+
     def run(self):
         """
         For each file in the list of files, processing is started.
@@ -64,19 +85,7 @@ class EafProcessor:
             print("No EAF files to process.", file=sys.stderr)
 
     def process_file(self, file_name):
-        """
-        Processes one file.
-
-        :param file_name:
-        :return:
-        """
-        try:
-            eaf = Eaf(file_name)
-            self.process_eaf(eaf, file_name)
-            eaf.to_file(self.output_dir + os.sep + os.path.basename(urlparse(file_name).path), pretty=True)
-        except IOError:
-            print("The EAF %s could not be processed." % file_name, file=sys.stderr)
-            print(sys.exc_info()[0])
-
-    def process_eaf(self, eaf, file_name):
-        pass
+        extension = os.path.splitext(os.path.basename(file_name))[1][1:]
+        if extension in self.file_processors:
+            for file_processor in self.file_processors[extension]:
+                file_processor.process_file(file_name)
