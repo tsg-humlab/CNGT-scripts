@@ -10,7 +10,7 @@ import sys
 import getopt
 import os
 from pympi.Elan import Eaf
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 # SETTINGS
 # Parameters for the lexicon reference
@@ -20,14 +20,15 @@ TYPE = "Signbank"
 URL = "https://signbank.science.ru.nl/"
 LEXICON_ID = "NGT"
 LEXICON_NAME = "NGT"
-DATCAT_ID = "Annotation Id Gloss"
-DATCAT_NAME = "Annotation Id Gloss"
+DATCAT_ID = "Annotation Id Gloss: Dutch"
+DATCAT_NAME = "Annotation Id Gloss: Dutch"
 # Linguistic type id
 LINGUISTIC_TYPE_ID = "gloss"
 
 
 class LexiconLinkAdder:
     def __init__(self, eaf_files, output_dir=None):
+        self.output_dir = None
         if output_dir:
             self.output_dir = output_dir.rstrip(os.sep)
             if not os.path.isdir(self.output_dir):
@@ -77,13 +78,24 @@ class LexiconLinkAdder:
         :return:
         """
         try:
+            print("File: " + file_name, file=sys.stderr)
             eaf = Eaf(file_name)
             eaf.add_lexicon_ref(LEXICON_REF, NAME, TYPE, URL,
                                 LEXICON_ID, LEXICON_NAME, DATCAT_ID, DATCAT_NAME)
+
+            # Remove old referred lexicon
+            if LINGUISTIC_TYPE_ID in eaf.linguistic_types:
+                if "LEXICON_REF" in eaf.linguistic_types[LINGUISTIC_TYPE_ID]:
+                    old_lexicon_ref = eaf.linguistic_types[LINGUISTIC_TYPE_ID]["LEXICON_REF"]
+                    del eaf.lexicon_refs[old_lexicon_ref]
+
             eaf.linguistic_types[LINGUISTIC_TYPE_ID]["LEXICON_REF"] = LEXICON_REF
 
-            eaf.to_file(self.output_dir + os.sep + os.path.basename(urlparse(file_name).path), pretty=True)
-        except IOError:
+            if self.output_dir is not None:
+                eaf.to_file(self.output_dir + os.sep + os.path.basename(urlparse(file_name).path), pretty=True)
+            else:
+                eaf.to_file(file_name, pretty=True)
+        except Exception:
             print("The EAF %s could not be processed." % file_name, file=sys.stderr)
             print(sys.exc_info()[0])
 
