@@ -94,11 +94,15 @@ class SignCounter:
 
                 for annotation in tier.findall("ANNOTATION/ALIGNABLE_ANNOTATION"):
                     annotation_id = annotation.attrib['ANNOTATION_ID']
+                    cve_ref = None
+                    if 'CVE_REF' in annotation.attrib:
+                        cve_ref = annotation.attrib['CVE_REF']
                     annotation_data = {
                         "begin": int(self.time_slots[annotation.attrib['TIME_SLOT_REF1']]),
                         "end": int(self.time_slots[annotation.attrib['TIME_SLOT_REF2']]),
                         "id": annotation_id,
                         "value": annotation.find("ANNOTATION_VALUE").text,
+                        "cve_ref": cve_ref,
                         "participant": participant,
                         "hand": hand
                     }
@@ -159,7 +163,7 @@ class SignCounter:
         for unit in list_of_glosses:
             tmp = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
             for annotation in unit:
-                gloss = annotation['value']
+                gloss = annotation['cve_ref'] if annotation['cve_ref'] else annotation['value']
 
                 try:
                     re.sub(r'\n', '', gloss)
