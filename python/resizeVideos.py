@@ -90,6 +90,7 @@ class VideoResizer:
                "-t", str(end_time - begin_time),
                "-filter:v", scale_formula,
                "-strict", "experimental",
+               "-y",
                output_file]
         print(" ".join(cmd))
         if not dry_run:
