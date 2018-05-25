@@ -8,6 +8,7 @@ import sys
 import os
 import getopt
 import json
+from pympi.Elan import Eaf
 from filecollectionprocessing.eafprocessor import EafProcessor
 from filecollectionprocessing.filecollectionprocessor import FileCollectionProcessor
 
@@ -19,6 +20,7 @@ class EafMetadataCalculator(EafProcessor):
 
     def __init__(self):
         self.metadata = {}
+        self.annotations_per_signer_per_file = {}
         self.annotation_frequencies = {}
 
     def get_annotations_from_longest_tier(self, eaf, subject=None):
@@ -47,13 +49,14 @@ class EafMetadataCalculator(EafProcessor):
 
     def process_eaf(self, eaf, file_name):
         print(file_name, file=sys.stderr)
+        self.count_signs(eaf, file_name)
+
         file_name = os.path.basename(file_name)
         self.metadata[file_name] = {}
         self.metadata[file_name]['speed'] = self.get_speed(eaf)
         self.metadata[file_name]['differentSigns'] = self.get_different_signs(eaf)
         self.metadata[file_name]['classifiers'] = self.get_classifiers(eaf)
         self.metadata[file_name]['sentenceLength'] = self.get_sentence_length(eaf)
-        self.count_signs(eaf)
         self.metadata[file_name]['fingerspelling'] = self.get_fingerspelling(eaf)
         self.metadata[file_name]['interaction'] = self.get_interaction(eaf)
         self.metadata[file_name]['dominanceReversal'] = self.get_dominance_reversal(eaf)
@@ -179,7 +182,7 @@ class EafMetadataCalculator(EafProcessor):
             print("No annotations found", file=sys.stderr)
             return 0
 
-    def count_signs(self, eaf):
+    def count_signs(self, eaf, file_name):
         """
         Total number of gloss annotations that fall within the 80% tail of the gloss frequency distribution across the 
         whole corpus. Frequencies are to be calculated on the basis of the tier per signer that contains most 
@@ -188,8 +191,13 @@ class EafMetadataCalculator(EafProcessor):
         :param eaf: 
         :return: 
         """
+
+        self.annotations_per_signer_per_file[file_name] = {}
         for subject_id in [1, 2]:
             (subject, annotations) = self.get_annotations_from_longest_tier(eaf, subject_id)
+
+            self.annotations_per_signer_per_file[file_name][subject_id] = annotations
+
             for annotation in annotations:
                 value = annotation['value']
                 if value in self.annotation_frequencies:
@@ -198,7 +206,19 @@ class EafMetadataCalculator(EafProcessor):
                     self.annotation_frequencies[value] = 1
 
     def get_low_frequency_signs(self):
-        pass
+        annotation_frequencies = list(self.annotation_frequencies.items())
+        index_80pct = int(len(annotation_frequencies)*0.8)
+        annotation_frequencies.sort(key=lambda ann: ann[1])
+        annotation_frequencies_80pct = set([ann[0] for ann in annotation_frequencies[:index_80pct]])
+
+        for file_path in self.annotations_per_signer_per_file:
+            file_name = os.path.basename(file_path)
+            self.metadata[file_name]['lowFreqSigns'] = {}
+            for subject_id in [1, 2]:
+                annotations = [ann['value'] for ann in self.annotations_per_signer_per_file[file_path][subject_id]]
+                number_of_low_frequency_signs = len(annotation_frequencies_80pct.intersection(annotations))
+                self.metadata[file_name]['lowFreqSigns'][subject_id] = number_of_low_frequency_signs
+
 
     def get_fingerspelling(self, eaf):
         """
