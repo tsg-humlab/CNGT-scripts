@@ -53,10 +53,12 @@ class EafMetadataCalculator(EafProcessor):
 
         file_name = os.path.basename(file_name)
         self.metadata[file_name] = {}
-        self.metadata[file_name]['speed'] = self.get_speed(eaf)
+        self.metadata[file_name]['speed'] = round(self.get_speed(eaf), 1)
         self.metadata[file_name]['differentSigns'] = self.get_different_signs(eaf)
-        self.metadata[file_name]['classifiers'] = self.get_classifiers(eaf)
-        self.metadata[file_name]['sentenceLength'] = self.get_sentence_length(eaf)
+        self.metadata[file_name]['classifiers'] = round(self.get_classifiers(eaf), 1)
+        sentence_length = self.get_sentence_length(eaf)
+        if sentence_length:
+            self.metadata[file_name]['sentenceLength'] = round(sentence_length, 1)
         self.metadata[file_name]['fingerspelling'] = self.get_fingerspelling(eaf)
         self.metadata[file_name]['interaction'] = self.get_interaction(eaf)
         self.metadata[file_name]['dominanceReversal'] = self.get_dominance_reversal(eaf)
@@ -159,10 +161,15 @@ class EafMetadataCalculator(EafProcessor):
         """
         (subject, annotations) = self.get_annotations_from_longest_tier(eaf)
         if subject and annotations:
-            tier_id = 'TranslationNarrow S' + str(subject)
+            tier_id = 'TranslationFree S' + str(subject)
             tier = eaf.tiers[tier_id]
             translation_annotations = transform_tier_data(eaf, tier)
+            if not translation_annotations:
+                tier_id = 'TranslationNarrow S' + str(subject)
+                tier = eaf.tiers[tier_id]
+                translation_annotations = transform_tier_data(eaf, tier)
             translation_annotations.sort(key=lambda ann: ann['begin'])
+
             if translation_annotations:
                 number_of_annotations_per_sentence = []
                 for transl_ann in translation_annotations:
@@ -174,13 +181,16 @@ class EafMetadataCalculator(EafProcessor):
 
                 sentence_length = sum(number_of_annotations_per_sentence) / float(len(number_of_annotations_per_sentence))
                 print("Sentence length: %f" % sentence_length, file=sys.stderr)
-                return sentence_length
+                if sentence_length >= 2.0:
+                    return sentence_length
+                else:
+                    return None
             else:
                 print("No (translation) annotations found", file=sys.stderr)
-                return 0
+                return None
         else:
             print("No annotations found", file=sys.stderr)
-            return 0
+            return None
 
     def count_signs(self, eaf, file_name):
         """
@@ -209,15 +219,21 @@ class EafMetadataCalculator(EafProcessor):
         annotation_frequencies = list(self.annotation_frequencies.items())
         index_80pct = int(len(annotation_frequencies)*0.8)
         annotation_frequencies.sort(key=lambda ann: ann[1])
-        annotation_frequencies_80pct = set([ann[0] for ann in annotation_frequencies[:index_80pct]])
+        included_frequencies = set([ann[1] for ann in annotation_frequencies[:index_80pct]])
+
+        annotation_frequencies_80pct = set([ann[0] for ann in annotation_frequencies if ann[1] in included_frequencies])
 
         for file_path in self.annotations_per_signer_per_file:
             file_name = os.path.basename(file_path)
-            self.metadata[file_name]['lowFreqSigns'] = {}
+            low_frequency_total = 0
             for subject_id in [1, 2]:
                 annotations = [ann['value'] for ann in self.annotations_per_signer_per_file[file_path][subject_id]]
-                number_of_low_frequency_signs = len(annotation_frequencies_80pct.intersection(annotations))
-                self.metadata[file_name]['lowFreqSigns'][subject_id] = number_of_low_frequency_signs
+                number_of_low_frequency_signs = 0
+                for annotation in annotations:
+                    if annotation in annotation_frequencies_80pct:
+                        number_of_low_frequency_signs += 1
+                low_frequency_total += number_of_low_frequency_signs
+            self.metadata[file_name]['lowFreqSigns'] = low_frequency_total
 
 
     def get_fingerspelling(self, eaf):
@@ -243,7 +259,7 @@ class EafMetadataCalculator(EafProcessor):
         :param eaf: 
         :return: 
         """
-        total = self.get_ooh_domrev_point_counts(eaf, ['TL', 'TR'])
+        total = self.get_ooh_domrev_point_counts(eaf, ['TL', 'TR']) - 1
         if total is not None:
             print("Number of interactions: %d" % total, file=sys.stderr)
             return total
