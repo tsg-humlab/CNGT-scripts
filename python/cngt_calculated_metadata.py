@@ -8,7 +8,6 @@ import sys
 import os
 import getopt
 import json
-from pympi.Elan import Eaf
 from filecollectionprocessing.eafprocessor import EafProcessor
 from filecollectionprocessing.filecollectionprocessor import FileCollectionProcessor
 
@@ -18,10 +17,27 @@ class EafMetadataCalculator(EafProcessor):
     
     """
 
-    def __init__(self):
+    def __init__(self, metadata_file=None):
+        self.metadata_file = metadata_file
         self.metadata = {}
         self.annotations_per_signer_per_file = {}
         self.annotation_frequencies = {}
+        self.ranges = {
+            'speed': {'min': 0, 'max': 0},
+            'differentSigns': {'min': 0, 'max': 0},
+            'classifiers': {'min': 0, 'max': 0},
+            'sentenceLength': {'min': 0, 'max': 0},
+            'fingerspelling': {'min': 0, 'max': 0},
+            'interaction': {'min': 0, 'max': 0},
+            'dominanceReversal': {'min': 0, 'max': 0},
+            'lowFreqSigns': {'min': 0, 'max': 0},
+        }
+        
+    def update_range(self, key, value):
+        if self.ranges[key]['min'] is None or value < self.ranges[key]['min']:
+            self.ranges[key]['min'] = value
+        elif self.ranges[key]['max'] is None or value > self.ranges[key]['max']:
+            self.ranges[key]['max'] = value
 
     def get_annotations_from_longest_tier(self, eaf, subject=None):
         # Get the annotations from the tier containing the most annotations
@@ -48,25 +64,45 @@ class EafMetadataCalculator(EafProcessor):
         return (subject, annotations)
 
     def process_eaf(self, eaf, file_name):
-        print(file_name, file=sys.stderr)
+        print(file_name, file=sys.stdout)
         self.count_signs(eaf, file_name)
 
         file_name = os.path.basename(file_name)
         self.metadata[file_name] = {}
+
+        self.metadata[file_name]['participants'] = get_participants(eaf)
+
         self.metadata[file_name]['speed'] = round(self.get_speed(eaf), 1)
+        self.update_range('speed', self.metadata[file_name]['speed'])
+
         self.metadata[file_name]['differentSigns'] = self.get_different_signs(eaf)
+        self.update_range('differentSigns', self.metadata[file_name]['differentSigns'])
+
         self.metadata[file_name]['classifiers'] = round(self.get_classifiers(eaf), 1)
+        self.update_range('classifiers', self.metadata[file_name]['classifiers'])
+
         sentence_length = self.get_sentence_length(eaf)
         if sentence_length:
             self.metadata[file_name]['sentenceLength'] = round(sentence_length, 1)
+            self.update_range('sentenceLength', self.metadata[file_name]['sentenceLength'])
+
         self.metadata[file_name]['fingerspelling'] = self.get_fingerspelling(eaf)
+        self.update_range('fingerspelling', self.metadata[file_name]['fingerspelling'])
+
         self.metadata[file_name]['interaction'] = self.get_interaction(eaf)
+        self.update_range('interaction', self.metadata[file_name]['interaction'])
+
         self.metadata[file_name]['dominanceReversal'] = self.get_dominance_reversal(eaf)
+        self.update_range('dominanceReversal', self.metadata[file_name]['dominanceReversal'])
 
     def get_result(self):
         self.get_low_frequency_signs()
-        print(json.dumps(self.metadata, sort_keys=True, indent=4))
-
+        output_data = {'ranges': self.ranges, 'sessions': self.metadata}
+        if self.metadata_file:
+            with open(self.metadata_file, 'w') as metadata_file:
+                json.dump(output_data, metadata_file, sort_keys=True, indent=4)
+        else:
+            print(json.dumps(output_data, sort_keys=True, indent=4))
 
     def get_speed(self, eaf):
         """
@@ -101,7 +137,7 @@ class EafMetadataCalculator(EafProcessor):
                 total_length += interval['length']
                 total_number_of_annotations += interval['number_of_annotations']
 
-            speed = (total_number_of_annotations / (total_length / 1000.0 / 60))
+            speed = (total_number_of_annotations / (total_length / 1000.0 / 60)) if total_length else 0
             print("Annotations per minute: %f" % speed, file=sys.stderr)  # Number of annotations per minute
             return speed
         else:
@@ -234,6 +270,7 @@ class EafMetadataCalculator(EafProcessor):
                         number_of_low_frequency_signs += 1
                 low_frequency_total += number_of_low_frequency_signs
             self.metadata[file_name]['lowFreqSigns'] = low_frequency_total
+            self.update_range('lowFreqSigns', self.metadata[file_name]['lowFreqSigns'])
 
 
     def get_fingerspelling(self, eaf):
@@ -260,7 +297,7 @@ class EafMetadataCalculator(EafProcessor):
         :return: 
         """
         total = self.get_ooh_domrev_point_counts(eaf, ['TL', 'TR']) - 1
-        if total is not None:
+        if total is not None and total >= 0:
             print("Number of interactions: %d" % total, file=sys.stderr)
             return total
         else:
@@ -330,24 +367,45 @@ def has_overlap(first, second, min_overlap=0):
     return False  # default
 
 
+def get_participants(eaf):
+    """
+    Get the participant of this EAF. Based on the condition the EAF has both GlossL S1 as GlossL S2 tiers.
+    :param eaf: 
+    :return: a list containing the participant codes
+    """
+    participants = []
+    for subject_id in [1, 2]:
+        tier_id = 'GlossL S' + str(subject_id)  # Determine tier id
+        tier = eaf.tiers[tier_id]
+        attributes = tier[-2]  # Get tier attributes
+        if 'PARTICIPANT' in attributes:
+            participant = attributes['PARTICIPANT']
+            participants.append(participant)
+    return participants
+
 if __name__ == "__main__":
     # -o Output directory; optional
     usage = "Usage: \n" + sys.argv[0] + \
-            " -o <output directory>"
+            " -o <output directory>" + \
+            " -f <output file>" + \
+            " <input files/dirs>"
 
     # Set default values
     output_dir = None
+    output_file = None
 
     # Register command line arguments
-    opt_list, file_list = getopt.getopt(sys.argv[1:], 'o:')
+    opt_list, file_list = getopt.getopt(sys.argv[1:], 'o:f:')
     for opt in opt_list:
         if opt[0] == '-o':
             output_dir = opt[1]
+        if opt[0] == '-f':
+            output_file = opt[1]
 
     # Build and run
     file_collection_processor = FileCollectionProcessor(file_list, output_dir=output_dir,
                                                         extensions_to_process=["eaf"])
-    eafMetadataCalculator = EafMetadataCalculator()
+    eafMetadataCalculator = EafMetadataCalculator(metadata_file=output_file)
     file_collection_processor.add_file_processor(eafMetadataCalculator)
     file_collection_processor.run()
     eafMetadataCalculator.get_result()

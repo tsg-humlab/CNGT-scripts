@@ -13,33 +13,54 @@ from filecollectionprocessing.eafprocessor import EafProcessor
 
 
 class EafToWebVttTransformer(EafProcessor):
+    def __init__(self, tier_base_name, subjects=['S1', 'S2'], hands=['']):
+        self.tier_base_name = tier_base_name
+        self.subjects = subjects
+        self.hands = hands
+
+        import itertools
+        if hands:
+            tier_names = ['{}{}'.format(tier_base_name, hand) for hand in hands]
+        else:
+            tier_names = [tier_base_name]
+
+        tier_names = ['{} {}'.format(name[0], name[1]) for name in itertools.product(tier_names, subjects)]
+        print(tier_names)
+        self.tier_names = tier_names
+
     def process_eaf(self, eaf, file_name):
+        print(file_name)
         file_basename = os.path.splitext(os.path.basename(file_name))[0]
         if file_basename.startswith('CNGT'):
             file_basename = file_basename[4:]
-        for subject_id in [1,2]:
+
+
+
+        for subject_id in self.subjects:
 
             # Put the annotations of the left and right hand in one list
             annotations = []
             participant = None
-            for hand in ['L','R']:
-                tier_id = 'Gloss' + hand + ' S' + str(subject_id)
+            for hand in self.hands:
+                tier_id = self.tier_base_name + hand + ' ' + str(subject_id)
                 tier = eaf.tiers[tier_id]
-                participant = tier[2]['PARTICIPANT']
-                annotations.extend(
-                    self.transform_annotation_tuples(
-                        eaf, list(tier[0].values()), hand
+                if len(tier) >= 3 and 'PARTICIPANT' in tier[2]:
+                    participant = tier[2]['PARTICIPANT']
+                    annotations.extend(
+                        self.transform_annotation_tuples(
+                            eaf, list(tier[0].values()), hand
+                        )
                     )
-                )
 
-            # Sort the list by begin time
-            annotations.sort(key=lambda tup: tup[0])
+            if participant:
+                # Sort the list by begin time
+                annotations.sort(key=lambda tup: tup[0])
 
-            print("Subject: %d (%d)" % (subject_id, len(annotations)))
-            # for annotation in annotations_per_subject[subject_id]:
-            #     print("BT: %d | ET: %d | Value: %s" % annotation)
-            webvtt = self.annotations_to_webvtt(annotations)
-            webvtt.save(self.output_dir + os.sep + file_basename + "_" + participant + ".vtt")
+                print("Subject: {} ({})".format(subject_id, len(annotations)))
+                # for annotation in annotations_per_subject[subject_id]:
+                #     print("BT: %d | ET: %d | Value: %s" % annotation)
+                webvtt = self.annotations_to_webvtt(annotations)
+                webvtt.save(self.output_dir + os.sep + file_basename + "_" + participant + ".vtt")
 
 
     def annotations_to_webvtt(self, annotations):
@@ -113,12 +134,13 @@ class EafToWebVttTransformer(EafProcessor):
         """
         annotations_new = []
         for annotation in annotations_original:
-            annotations_new.append((
-                eaf.timeslots[annotation[0]],
-                eaf.timeslots[annotation[1]],
-                annotation[2],
-                hand
-            ))
+            if annotation[2]:
+                annotations_new.append((
+                    eaf.timeslots[annotation[0]],
+                    eaf.timeslots[annotation[1]],
+                    annotation[2],
+                    hand
+                ))
         return annotations_new
 
 if __name__ == "__main__":
@@ -130,10 +152,15 @@ if __name__ == "__main__":
     output_dir = None
 
     # Register command line arguments
-    opt_list, file_list = getopt.getopt(sys.argv[1:], 'o:')
+    opt_list, file_list = getopt.getopt(sys.argv[1:], 'o:t:h:')
+    hands = []
     for opt in opt_list:
         if opt[0] == '-o':
             output_dir = opt[1]
+        if opt[0] == '-t':
+            tier_base_name = opt[1]
+        if opt[0] == '-h':
+            hands.append(opt[1])
 
     # Check for errors and report
     errors = []
@@ -154,6 +181,11 @@ if __name__ == "__main__":
 
     # Build and run
     file_collection_processor = FileCollectionProcessor(file_list, output_dir=output_dir, extensions_to_process=["eaf"])
-    eafToWebVttTransformer = EafToWebVttTransformer()
+    args = {}
+    if tier_base_name:
+        args['tier_base_name'] = tier_base_name
+    if hands:
+        args['hands'] = hands
+    eafToWebVttTransformer = EafToWebVttTransformer(**args)
     file_collection_processor.add_file_processor(eafToWebVttTransformer)
     file_collection_processor.run()
