@@ -8,6 +8,8 @@ import sys
 import os
 import getopt
 import json
+import numpy
+import math
 from filecollectionprocessing.eafprocessor import EafProcessor
 from filecollectionprocessing.filecollectionprocessor import FileCollectionProcessor
 
@@ -32,12 +34,24 @@ class EafMetadataCalculator(EafProcessor):
             'dominanceReversal': {'min': 0, 'max': 0},
             'lowFreqSigns': {'min': 0, 'max': 0},
         }
+
+        self.value_lists = {
+            'speed': [],                # float
+            'differentSigns': [],       # int
+            'classifiers': [],          # float
+            'sentenceLength': [],       # float
+            'fingerspelling': [],       # int
+            'interaction': [],          # int
+            'dominanceReversal': [],    # int
+            'lowFreqSigns': [],         # int
+        }
         
     def update_range(self, key, value):
         if self.ranges[key]['min'] is None or value < self.ranges[key]['min']:
             self.ranges[key]['min'] = value
         elif self.ranges[key]['max'] is None or value > self.ranges[key]['max']:
             self.ranges[key]['max'] = value
+        self.value_lists[key].append(value)
 
     def get_annotations_from_longest_tier(self, eaf, subject=None):
         # Get the annotations from the tier containing the most annotations
@@ -95,9 +109,37 @@ class EafMetadataCalculator(EafProcessor):
         self.metadata[file_name]['dominanceReversal'] = self.get_dominance_reversal(eaf)
         self.update_range('dominanceReversal', self.metadata[file_name]['dominanceReversal'])
 
+    def calculate_ranges(self):
+        ranges = {}
+
+        for float_value in ['speed',  'classifiers', 'sentenceLength']:
+            mean = numpy.mean(self.value_lists[float_value])
+            std2 = numpy.std(self.value_lists[float_value]) * 2
+            ranges[float_value] = {}
+            std_min = round(mean - std2, 2)
+            range_min = self.ranges[float_value]['min']
+            ranges[float_value]['min'] = std_min if std_min > range_min else range_min
+            std_max = round(mean + std2, 2)
+            range_max = self.ranges[float_value]['max']
+            ranges[float_value]['max'] = std_max if std_max < range_max else range_max
+
+        for int_value in ['differentSigns',  'fingerspelling', 'interaction', 'dominanceReversal', 'lowFreqSigns']:
+            mean = numpy.mean(self.value_lists[int_value])
+            std2 = numpy.std(self.value_lists[int_value]) * 2
+            ranges[int_value] = {}
+            std_min = math.floor(mean - std2)
+            range_min = self.ranges[int_value]['min']
+            ranges[int_value]['min'] = std_min if std_min > range_min else range_min
+            std_max = math.ceil(mean + std2)
+            range_max = self.ranges[int_value]['max']
+            ranges[int_value]['max'] = std_max if std_max < range_max else range_max
+
+        return ranges
+
     def get_result(self):
         self.get_low_frequency_signs()
-        output_data = {'ranges': self.ranges, 'sessions': self.metadata}
+        ranges = self.calculate_ranges()
+        output_data = {'ranges': ranges, 'sessions': self.metadata}
         if self.metadata_file:
             with open(self.metadata_file, 'w') as metadata_file:
                 json.dump(output_data, metadata_file, sort_keys=True, indent=4)
