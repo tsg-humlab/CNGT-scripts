@@ -10,8 +10,8 @@ import getopt
 import json
 import numpy
 import math
-from filecollectionprocessing.eafprocessor import EafProcessor
-from filecollectionprocessing.filecollectionprocessor import FileCollectionProcessor
+from CNGT_scripts.python.filecollectionprocessing.eafprocessor import EafProcessor
+from CNGT_scripts.python.filecollectionprocessing.filecollectionprocessor import FileCollectionProcessor
 
 
 class EafMetadataCalculator(EafProcessor):
@@ -424,6 +424,25 @@ def get_participants(eaf):
             participant = attributes['PARTICIPANT']
             participants.append(participant)
     return participants
+
+def get_creation_time(fname):
+    import datetime as DT
+    from django.utils.timezone import get_current_timezone
+    # pip install python-dateutil
+    from dateutil.parser import parse
+    from lxml import etree
+    with open(fname, encoding="utf-8") as eaf:
+
+        try:
+            xml = etree.parse(eaf)
+            # root node is ANNOTATION_DOCUMENT
+            root = xml.getroot()
+            creation_date = root.attrib['DATE']
+            date_time_obj = parse(creation_date)
+        except:
+            date_time_obj = DT.datetime.now(tz=get_current_timezone())
+
+        return date_time_obj
 
 if __name__ == "__main__":
     # -o Output directory; optional
