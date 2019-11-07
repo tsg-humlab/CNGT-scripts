@@ -21,7 +21,7 @@ class SignCounter:
         self.time_slots = {}
 
         self.freqs = defaultdict(lambda: 0)
-        self.freqsPerPerson = defaultdict(lambda: defaultdict(int))
+        self.freqsPerPerson = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
         self.freqsPerRegion = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
 
         for f in files:
@@ -62,12 +62,14 @@ class SignCounter:
             sys.stderr.write("No EAF files to process.\n")
 
     def process_file(self, fname):
+        file_basename = os.path.basename(fname)
+        basename = os.path.splitext(file_basename)[0]
         with open(fname, encoding="utf-8") as eaf:
             xml = etree.parse(eaf)
             self.extract_time_slots(xml)
             (list_of_glosses, tier_id_prefix) = self.extract_glosses(xml)
             (list_of_gloss_units) = self.to_units(list_of_glosses, tier_id_prefix)
-            self.restructure(list_of_gloss_units)
+            self.restructure(list_of_gloss_units, basename)
 
     def extract_time_slots(self, xml):
         for time_slot in xml.findall("//TIME_SLOT"):
@@ -159,7 +161,7 @@ class SignCounter:
 
         return list_of_gloss_units
 
-    def restructure(self, list_of_glosses):
+    def restructure(self, list_of_glosses, basename):
         for unit in list_of_glosses:
             tmp = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
             for annotation in unit:
@@ -177,11 +179,11 @@ class SignCounter:
                 if gloss is not None and not gloss == '':
                     tmp[gloss]['participants'][annotation['participant']] += 1
 
-            for gloss in tmp:
+            for gloss in tmp.keys():
                 self.freqs[gloss] += 1
 
-                for person in tmp[gloss]['participants']:
-                    self.freqsPerPerson[person][gloss] += 1
+                for person in tmp[gloss]['participants'].keys():
+                    self.freqsPerPerson[person][basename][gloss] += 1
 
                     region = self.metadata[person]
                     self.freqsPerRegion[region][person][gloss] += 1
@@ -202,8 +204,16 @@ class SignCounter:
             # Person frequencies
             number_of_signers = 0
             for person in sorted(self.freqsPerPerson.keys()):
-                if gloss in self.freqsPerPerson[person]:
-                    number_of_signers += 1
+                for document in sorted(self.freqsPerPerson[person].keys()):
+                    if gloss in self.freqsPerPerson[person][document]:
+                        number_of_signers += 1
+
+            # Uncomment the following to pass this in the result
+            # signer_frequencies = defaultdict(lambda: defaultdict(int))
+            # for person in sorted(self.freqsPerPerson.keys()):
+            #     for document in sorted(self.freqsPerPerson[person].keys()):
+            #         if gloss in self.freqsPerPerson[person][document].keys():
+            #             signer_frequencies[person][document] = self.freqsPerPerson[person][document][gloss]
 
             # Region frequencies
             region_frequencies = defaultdict(lambda: defaultdict(int))
@@ -215,9 +225,10 @@ class SignCounter:
                         region_frequencies[region]['numberOfSigners'] += 1
 
             self.sign_counts[gloss] = {'frequency': self.freqs[gloss], 'numberOfSigners': number_of_signers,
-                                    'frequenciesPerRegion': region_frequencies}
+                                    'frequenciesPerRegion': region_frequencies} #, 'frequenciesPerSpeaker': signer_frequencies}
 
     def get_result(self):
+
         return self.sign_counts
 
 

@@ -10,7 +10,7 @@ import sys
 import os
 from pympi.Elan import Eaf
 from urllib.parse import urlparse
-from filecollectionprocessing.fileprocessor import FileProcessor
+from CNGT_scripts.python.filecollectionprocessing.fileprocessor import FileProcessor
 
 
 class EafProcessor(FileProcessor):
