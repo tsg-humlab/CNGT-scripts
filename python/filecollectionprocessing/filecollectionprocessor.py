@@ -9,7 +9,7 @@ from __future__ import print_function
 import sys
 import os
 
-from filecollectionprocessing.fileprocessor import FileProcessor
+from CNGT_scripts.python.filecollectionprocessing.fileprocessor import FileProcessor
 
 
 class FileCollectionProcessor:
