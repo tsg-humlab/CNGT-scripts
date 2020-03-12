@@ -24,6 +24,7 @@ class SignCounter:
         self.freqs = defaultdict(lambda: 0)
         self.freqsPerPerson = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
         self.freqsPerRegion = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+        self.freqsPerSomething = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(int))))
 
         for f in files:
             self.add_file(f)
@@ -43,9 +44,9 @@ class SignCounter:
 
     def load_metadata(self, metadata_file):
         with open(metadata_file) as meta:
-            header = meta.readline().split("\t")  # Skip first row (header)
+            header = meta.readline().strip().split("\t")  # Skip first row (header)
             for line in meta.readlines():
-                fields = line.split("\t")
+                fields = line.strip().split("\t")
                 self.metadata[fields[0]] = dict(zip(header[1:], fields[1:]))
 
     def run(self):
@@ -269,7 +270,14 @@ class SignCounter:
                         region = self.metadata[person]['Metadata region']
                         self.freqsPerRegion[region][person][gloss] += 1
                     except:
-                        self.freqsPerRegion = {}
+                        pass
+
+                    try:
+                        for something in self.metadata[person].keys():
+                            item = self.metadata[person][something]
+                            self.freqsPerSomething[something][item][person][gloss] += 1
+                    except:
+                        pass
 
     def generate_result(self):
         number_of_tokens = 0
@@ -307,8 +315,19 @@ class SignCounter:
                         region_frequencies[region]['frequency'] += self.freqsPerRegion[region][person][gloss]
                         region_frequencies[region]['numberOfSigners'] += 1
 
+            something_frequencies = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+            for something in sorted(self.freqsPerSomething.keys()):
+                for item in sorted(self.freqsPerSomething[something].keys()):
+                    for person in sorted(self.freqsPerSomething[something][item].keys()):
+                        if gloss in self.freqsPerSomething[something][item][person]:
+                            label = 'frequencyPer' + something
+                            something_frequencies[label][item]['frequency'] += \
+                                self.freqsPerSomething[something][item][person][gloss]
+                            something_frequencies[label][item]['numberOfSigners'] += 1
+
             self.sign_counts[gloss] = {'frequency': self.freqs[gloss], 'numberOfSigners': number_of_signers,
                                     'frequenciesPerRegion': region_frequencies} #, 'frequenciesPerSpeaker': signer_frequencies}
+            self.sign_counts[gloss].update(something_frequencies)
 
     def get_result(self):
 
