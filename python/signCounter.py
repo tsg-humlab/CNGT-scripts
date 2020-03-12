@@ -75,7 +75,6 @@ class SignCounter:
                     list_of_gloss_units = self.to_units(extracted_glosses[0])
                     self.restructure(list_of_gloss_units, basename)
                 elif extracted_glosses[1] == 2:
-                    print(extracted_glosses[0][1])
                     list_of_gloss_units = self.to_units_two_handed(extracted_glosses[0])
                     self.restructure(list_of_gloss_units, basename)
 
@@ -267,7 +266,7 @@ class SignCounter:
                     self.freqsPerPerson[person][basename][gloss] += 1
 
                     try:
-                        region = self.metadata[person]
+                        region = self.metadata[person]['Metadata region']
                         self.freqsPerRegion[region][person][gloss] += 1
                     except:
                         self.freqsPerRegion = {}
