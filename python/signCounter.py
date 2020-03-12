@@ -64,19 +64,36 @@ class SignCounter:
     def process_file(self, fname):
         file_basename = os.path.basename(fname)
         basename = os.path.splitext(file_basename)[0]
-        with open(fname, encoding="utf-8") as eaf:
+        with open(fname, 'r', encoding="utf-8") as eaf:
             xml = etree.parse(eaf)
             self.extract_time_slots(xml)
-            (list_of_glosses, tier_id_prefix) = self.extract_glosses(xml)
-            (list_of_gloss_units) = self.to_units(list_of_glosses, tier_id_prefix)
-            self.restructure(list_of_gloss_units, basename)
+            if self.check_two_handed(xml):
+                list_of_glosses, tier_id_prefix = self.extract_glosses_two_handed(xml)
+                list_of_gloss_units = self.to_units_two_handed(list_of_glosses, tier_id_prefix)
+                self.restructure(list_of_gloss_units, basename)
+            else:
+                list_of_glosses = self.extract_glosses(xml)
+                list_of_gloss_units = self.to_units(list_of_glosses)
+                self.restructure(list_of_gloss_units, basename)
 
     def extract_time_slots(self, xml):
         for time_slot in xml.findall("//TIME_SLOT"):
             time_slot_id = time_slot.attrib['TIME_SLOT_ID']
             self.time_slots[time_slot_id] = time_slot.attrib['TIME_VALUE']
 
-    def extract_glosses(self, xml):
+    def check_two_handed(self, xml):
+        """
+        Checks whether there are tiers for separate hands,
+        so starting with 'GlossL' or 'GlossR'.
+        """
+        for tier in xml.findall("//TIER"):
+            tier_id = tier.attrib['TIER_ID']
+            match = re.match(r'^(Gloss?)([LR]) S[12]$', tier_id)
+            if match and ('PARENT_REF' not in tier.attrib or tier.attrib['PARENT_REF'] == ''):
+                return True
+        return False
+
+    def extract_glosses_two_handed(self, xml):
         list_of_glosses = {}  # Structure: { $tierID: { "participant":  "...", "annotations": [ { "begin": ..., "end": ..., "id": ..., "participant": ... }, { ... } ] } }
         tier_id_prefix = "Gloss"
         for tier in xml.findall("//TIER"):
@@ -112,7 +129,45 @@ class SignCounter:
 
         return list_of_glosses, tier_id_prefix
 
-    def to_units(self, list_of_glosses, tier_id_start):
+    def extract_glosses(self, xml):
+        list_of_glosses = {}
+        tier_type = "gloss"
+        for tier in xml.findall("//TIER"):
+            type = tier.attrib['LINGUISTIC_TYPE_REF']
+            if type.lower() == tier_type:
+                tier_id = tier.attrib['TIER_ID']
+                list_of_glosses[tier_id] = {}
+                participant = self.get_participant(tier)
+                list_of_glosses[tier_id]["participant"] = participant
+                list_of_glosses[tier_id]["annotations"] = self.get_list_of_glosses(tier, participant, None)
+        return list_of_glosses
+
+    def get_participant(self, tier):
+        if 'PARTICIPANT' in tier.attrib:
+            return tier.attrib['PARTICIPANT']
+        return ""
+
+    def get_list_of_glosses(self, tier, participant, hand):
+        annotations = []
+        for annotation in tier.findall("ANNOTATION/ALIGNABLE_ANNOTATION"):
+            annotation_id = annotation.attrib['ANNOTATION_ID']
+            cve_ref = None
+            if 'CVE_REF' in annotation.attrib:
+                cve_ref = annotation.attrib['CVE_REF']
+            annotation_data = {
+                "begin": int(self.time_slots[annotation.attrib['TIME_SLOT_REF1']]),
+                "end": int(self.time_slots[annotation.attrib['TIME_SLOT_REF2']]),
+                "id": annotation_id,
+                "value": annotation.find("ANNOTATION_VALUE").text,
+                "cve_ref": cve_ref,
+                "participant": participant,
+                "hand": hand
+            }
+            annotations.append(annotation_data)
+        return annotations
+
+
+    def to_units_two_handed(self, list_of_glosses, tier_id_start):
         """Turns the list of glosses into a list of units of overlapping glosses.
         :rtype: list of gloss units
         """
@@ -161,6 +216,13 @@ class SignCounter:
 
         return list_of_gloss_units
 
+    def to_units(self, list_of_glosses):
+        list_of_gloss_units = []  # Structure: [ [ { "begin": ..., "end": ..., "id": ..., "participant": ... } ], [ ] ]
+        for tier_name, tier_data in list_of_glosses.items():
+            for annotation in tier_data["annotations"]:
+                list_of_gloss_units.append([annotation])
+        return list_of_gloss_units
+
     def restructure(self, list_of_glosses, basename):
         for unit in list_of_glosses:
             tmp = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
@@ -185,8 +247,11 @@ class SignCounter:
                 for person in tmp[gloss]['participants'].keys():
                     self.freqsPerPerson[person][basename][gloss] += 1
 
-                    region = self.metadata[person]
-                    self.freqsPerRegion[region][person][gloss] += 1
+                    try:
+                        region = self.metadata[person]
+                        self.freqsPerRegion[region][person][gloss] += 1
+                    except:
+                        self.freqsPerRegion = {}
 
     def generate_result(self):
         number_of_tokens = 0
