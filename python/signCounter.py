@@ -14,8 +14,9 @@ from collections import defaultdict
 
 
 class SignCounter:
-    def __init__(self, metadata_file, files, minimum_overlap=0):
+    def __init__(self, metadata_file, files, minimum_overlap=0, gloss_tier_type='gloss'):
         self.minimum_overlap = int(minimum_overlap)
+        self.gloss_tier_type = gloss_tier_type
         self.all_files = []
         self.metadata = {}
         self.time_slots = {}
@@ -42,10 +43,10 @@ class SignCounter:
 
     def load_metadata(self, metadata_file):
         with open(metadata_file) as meta:
-            meta.readline()  # Skip first row (header)
+            header = meta.readline().split("\t")  # Skip first row (header)
             for line in meta.readlines():
                 fields = line.split("\t")
-                self.metadata[fields[0]] = fields[1]
+                self.metadata[fields[0]] = dict(zip(header[1:], fields[1:]))
 
     def run(self):
         """ """
@@ -72,14 +73,34 @@ class SignCounter:
                 list_of_gloss_units = self.to_units_two_handed(list_of_glosses, tier_id_prefix)
                 self.restructure(list_of_gloss_units, basename)
             else:
-                list_of_glosses = self.extract_glosses(xml)
-                list_of_gloss_units = self.to_units(list_of_glosses)
-                self.restructure(list_of_gloss_units, basename)
+                grouped_tiers = self.group_tiers_per_participant(xml)
+                extracted_glosses_per_participant = self.extract_glosses_per_participant(grouped_tiers)
+                for participant, extracted_glosses in extracted_glosses_per_participant.items():
+                    if extracted_glosses[1] == 1:
+                        list_of_gloss_units = self.to_units(extracted_glosses[0])
+                        self.restructure(list_of_gloss_units, basename)
+                    elif extracted_glosses[1] == 2:
+                        list_of_gloss_units = self.to_units_two_handed(extracted_glosses[0])
+                        self.restructure(list_of_gloss_units, basename)
 
+    # Helper functions to extract data from the EAF XML
     def extract_time_slots(self, xml):
         for time_slot in xml.findall("//TIME_SLOT"):
             time_slot_id = time_slot.attrib['TIME_SLOT_ID']
             self.time_slots[time_slot_id] = time_slot.attrib['TIME_VALUE']
+
+    def get_tier_id(self, tier):
+        return tier.attrib['TIER_ID']
+
+    def get_participant(self, tier):
+        if 'PARTICIPANT' in tier.attrib:
+            return tier.attrib['PARTICIPANT']
+        return ""
+
+    def get_linguistic_type(self, tier):
+        if 'LINGUISTIC_TYPE_REF' in tier.attrib:
+            return tier.attrib['LINGUISTIC_TYPE_REF']
+        return ""
 
     def check_two_handed(self, xml):
         """
@@ -92,23 +113,44 @@ class SignCounter:
             if match and ('PARENT_REF' not in tier.attrib or tier.attrib['PARENT_REF'] == ''):
                 return True
         return False
+    # End helper functions
 
-    def extract_glosses_two_handed(self, xml):
-        list_of_glosses = {}  # Structure: { $tierID: { "participant":  "...", "annotations": [ { "begin": ..., "end": ..., "id": ..., "participant": ... }, { ... } ] } }
-        tier_id_prefix = "Gloss"
+    def group_tiers_per_participant(self, xml):
+        grouped_tiers = defaultdict(list)
         for tier in xml.findall("//TIER"):
-            tier_id = tier.attrib['TIER_ID']
+            if self.get_linguistic_type(tier).lower() == self.gloss_tier_type \
+                    and ('PARENT_REF' not in tier.attrib or tier.attrib['PARENT_REF'] == ''):
+                grouped_tiers[self.get_participant(tier)].append(tier)
+        return grouped_tiers
+
+    def extract_glosses_per_participant(self, grouped_tiers):
+        extracted_glosses_per_participant = {}
+        for participant, tier_list in grouped_tiers.items():
+            if len(tier_list) == 1:
+                extracted_glosses_per_participant[participant] = self.extract_glosses(participant, tier_list[0]), 1
+            elif len(tier_list) == 2:
+                extracted_glosses_per_participant[participant] = self.extract_glosses_two_handed(participant, tier_list), 2
+            else:
+                # No extraction possible because the number of tiers
+                # for a specific participant is not 1 or 2
+                pass
+        return extracted_glosses_per_participant
+
+    def extract_glosses_two_handed(self, participant, tier_list):
+        list_of_glosses = {}  # Structure: { $tierID: { "participant":  "...", "annotations": [ { "begin": ..., "end": ..., "id": ..., "participant": ... }, { ... } ] } }
+        tier_id_hand = {}
+        for tier in tier_list:
+            tier_id = self.get_tier_id(tier)
             list_of_glosses[tier_id] = {}
 
-            match = re.match(r'^(Gloss?)([LR]) S[12]$', tier_id)
-            if match and ('PARENT_REF' not in tier.attrib or tier.attrib['PARENT_REF'] == ''):
-                tier_id_prefix = match.group(1)
-                hand = match.group(2)
+            match_left = re.match(r'(Gloss?L|left\s*hand)', tier_id, re.IGNORECASE)
+            match_right = re.match(r'(Gloss?L|right\s*hand)', tier_id, re.IGNORECASE)
+            if match_left or match_right:
+                hand = 'L' if match_left else 'R'
+                tier_id_hand[hand] = tier_id
 
-                participant = ""
-                if 'PARTICIPANT' in tier.attrib:
-                    participant = tier.attrib['PARTICIPANT']
-                    list_of_glosses[tier_id]["participant"] = participant
+                list_of_glosses[tier_id]["participant"] = participant
+
                 list_of_glosses[tier_id]["annotations"] = []
 
                 for annotation in tier.findall("ANNOTATION/ALIGNABLE_ANNOTATION"):
@@ -127,25 +169,15 @@ class SignCounter:
                     }
                     list_of_glosses[tier_id]["annotations"].append(annotation_data)
 
-        return list_of_glosses, tier_id_prefix
+        return list_of_glosses, tier_id_hand
 
-    def extract_glosses(self, xml):
+    def extract_glosses(self, participant, tier):
         list_of_glosses = {}
-        tier_type = "gloss"
-        for tier in xml.findall("//TIER"):
-            type = tier.attrib['LINGUISTIC_TYPE_REF']
-            if type.lower() == tier_type:
-                tier_id = tier.attrib['TIER_ID']
-                list_of_glosses[tier_id] = {}
-                participant = self.get_participant(tier)
-                list_of_glosses[tier_id]["participant"] = participant
-                list_of_glosses[tier_id]["annotations"] = self.get_list_of_glosses(tier, participant, None)
+        tier_id = self.get_tier_id(tier)
+        list_of_glosses[tier_id] = {}
+        list_of_glosses[tier_id]["participant"] = participant
+        list_of_glosses[tier_id]["annotations"] = self.get_list_of_glosses(tier, participant, None)
         return list_of_glosses
-
-    def get_participant(self, tier):
-        if 'PARTICIPANT' in tier.attrib:
-            return tier.attrib['PARTICIPANT']
-        return ""
 
     def get_list_of_glosses(self, tier, participant, hand):
         annotations = []
@@ -167,18 +199,21 @@ class SignCounter:
         return annotations
 
 
-    def to_units_two_handed(self, list_of_glosses, tier_id_start):
+    def to_units_two_handed(self, list_of_glosses_and_tier_id_hand):
         """Turns the list of glosses into a list of units of overlapping glosses.
         :rtype: list of gloss units
         """
+        list_of_glosses = list_of_glosses_and_tier_id_hand[0]
+        tier_id_hand = list_of_glosses_and_tier_id_hand[1]
+
         list_of_gloss_units = []  # Structure: [ [ { "begin": ..., "end": ..., "id": ..., "participant": ... } ], [ ] ]
         for signer_id in (1, 2):
             unit = []  # Overlapping glosses are put in a unit.
             last_end_on = ''  # The hand (L or R) of the last seen gloss
             last_end = None  # The end timeSlot of the last seen gloss
 
-            right_tier_id = tier_id_start + "R S" + str(signer_id)
-            left_tier_id = tier_id_start + "L S" + str(signer_id)
+            right_tier_id = tier_id_hand['R']
+            left_tier_id = tier_id_hand['L']
             if right_tier_id in list_of_glosses and left_tier_id in list_of_glosses:
                 right_hand_data = list_of_glosses[right_tier_id]
                 left_hand_data = list_of_glosses[left_tier_id]
@@ -197,7 +232,7 @@ class SignCounter:
                         else:
                             last_end_on = 'L'
 
-                        current_hand_data = list_of_glosses[tier_id_start + last_end_on + " S" + str(signer_id)]
+                        current_hand_data = list_of_glosses[tier_id_hand[last_end_on]]
                         current_hand_begin = current_hand_data['annotations'][0]['begin']
                         if last_end is not None and current_hand_begin > (last_end - self.minimum_overlap):
                             # Begin new unit
