@@ -43,11 +43,14 @@ class SignCounter:
             sys.stderr.write("No such file of directory: %s\n" % fname)
 
     def load_metadata(self, metadata_file):
-        with open(metadata_file) as meta:
-            header = meta.readline().strip().split("\t")  # Skip first row (header)
-            for line in meta.readlines():
-                fields = line.strip().split("\t")
-                self.metadata[fields[0]] = dict(zip(header[1:], fields[1:]))
+        if not metadata_file:
+            self.metadata = {}
+        else:
+            with open(metadata_file) as meta:
+                header = meta.readline().strip().split("\t")  # Skip first row (header)
+                for line in meta.readlines():
+                    fields = line.strip().split("\t")
+                    self.metadata[fields[0]] = dict(zip(header[1:], fields[1:]))
 
     def run(self):
         """ """
@@ -345,9 +348,6 @@ if __name__ == "__main__":
             metadata_fname = opt[1]
         if opt[0] == '-o':
             min_overlap = opt[1]
-
-    if metadata_fname is None or metadata_fname == '':
-        errors.append("No metadata file given.")
 
     if min_overlap is None or min_overlap == '':
         errors.append("No minimum overlap file given.")
