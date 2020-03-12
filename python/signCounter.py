@@ -68,20 +68,16 @@ class SignCounter:
         with open(fname, 'r', encoding="utf-8") as eaf:
             xml = etree.parse(eaf)
             self.extract_time_slots(xml)
-            if self.check_two_handed(xml):
-                list_of_glosses, tier_id_prefix = self.extract_glosses_two_handed(xml)
-                list_of_gloss_units = self.to_units_two_handed(list_of_glosses, tier_id_prefix)
-                self.restructure(list_of_gloss_units, basename)
-            else:
-                grouped_tiers = self.group_tiers_per_participant(xml)
-                extracted_glosses_per_participant = self.extract_glosses_per_participant(grouped_tiers)
-                for participant, extracted_glosses in extracted_glosses_per_participant.items():
-                    if extracted_glosses[1] == 1:
-                        list_of_gloss_units = self.to_units(extracted_glosses[0])
-                        self.restructure(list_of_gloss_units, basename)
-                    elif extracted_glosses[1] == 2:
-                        list_of_gloss_units = self.to_units_two_handed(extracted_glosses[0])
-                        self.restructure(list_of_gloss_units, basename)
+            grouped_tiers = self.group_tiers_per_participant(xml)
+            extracted_glosses_per_participant = self.extract_glosses_per_participant(grouped_tiers)
+            for participant, extracted_glosses in extracted_glosses_per_participant.items():
+                if extracted_glosses[1] == 1:
+                    list_of_gloss_units = self.to_units(extracted_glosses[0])
+                    self.restructure(list_of_gloss_units, basename)
+                elif extracted_glosses[1] == 2:
+                    print(extracted_glosses[0][1])
+                    list_of_gloss_units = self.to_units_two_handed(extracted_glosses[0])
+                    self.restructure(list_of_gloss_units, basename)
 
     # Helper functions to extract data from the EAF XML
     def extract_time_slots(self, xml):
@@ -101,18 +97,6 @@ class SignCounter:
         if 'LINGUISTIC_TYPE_REF' in tier.attrib:
             return tier.attrib['LINGUISTIC_TYPE_REF']
         return ""
-
-    def check_two_handed(self, xml):
-        """
-        Checks whether there are tiers for separate hands,
-        so starting with 'GlossL' or 'GlossR'.
-        """
-        for tier in xml.findall("//TIER"):
-            tier_id = tier.attrib['TIER_ID']
-            match = re.match(r'^(Gloss?)([LR]) S[12]$', tier_id)
-            if match and ('PARENT_REF' not in tier.attrib or tier.attrib['PARENT_REF'] == ''):
-                return True
-        return False
     # End helper functions
 
     def group_tiers_per_participant(self, xml):
@@ -144,7 +128,7 @@ class SignCounter:
             list_of_glosses[tier_id] = {}
 
             match_left = re.match(r'(Gloss?L|left\s*hand)', tier_id, re.IGNORECASE)
-            match_right = re.match(r'(Gloss?L|right\s*hand)', tier_id, re.IGNORECASE)
+            match_right = re.match(r'(Gloss?R|right\s*hand)', tier_id, re.IGNORECASE)
             if match_left or match_right:
                 hand = 'L' if match_left else 'R'
                 tier_id_hand[hand] = tier_id
