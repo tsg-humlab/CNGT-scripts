@@ -14,9 +14,10 @@ from collections import defaultdict
 
 
 class SignCounter:
-    def __init__(self, metadata_file, files, minimum_overlap=0, gloss_tier_type='gloss'):
+    def __init__(self, metadata_file, files, minimum_overlap=0, gloss_tier_type='gloss', region_metadata_id='Metadata region'):
         self.minimum_overlap = int(minimum_overlap)
         self.gloss_tier_type = gloss_tier_type
+        self.region_metadata_id = region_metadata_id
         self.all_files = []
         self.metadata = {}
         self.time_slots = {}
@@ -270,15 +271,16 @@ class SignCounter:
                     self.freqsPerPerson[person][basename][gloss] += 1
 
                     try:
-                        region = self.metadata[person]['Metadata region']
+                        region = self.metadata[person][self.region_metadata_id]
                         self.freqsPerRegion[region][person][gloss] += 1
                     except:
                         pass
 
                     try:
                         for something in self.metadata[person].keys():
-                            item = self.metadata[person][something]
-                            self.freqsPerSomething[something][item][person][gloss] += 1
+                            if something is not 'self.region_metadata_id':
+                                item = self.metadata[person][something]
+                                self.freqsPerSomething[something][item][person][gloss] += 1
                     except:
                         pass
 
