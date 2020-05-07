@@ -17,7 +17,12 @@ def grouper(n, iterable, fillvalue=None):
 with open(txt_file) as txt_file:
     lines = txt_file.readlines()
 
-title = lines.pop(0)
+# If second line is empty assume a title
+if lines[1].strip() == '':
+    print("EMTPY SECOND LINE")
+    title = lines.pop(0)
+else:
+    lines.insert(0, '')
 
 groups = list(grouper(3, lines))
 
