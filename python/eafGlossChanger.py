@@ -7,8 +7,8 @@ Script to add Signbank as a lexicon to the CNGT EAFs.
 import sys
 import getopt
 from openpyxl import load_workbook
-from filecollectionprocessing.filecollectionprocessor import FileCollectionProcessor
-from filecollectionprocessing.eafprocessor import EafProcessor
+from CNGT_scripts.python.filecollectionprocessing.filecollectionprocessor import FileCollectionProcessor
+from CNGT_scripts.python.filecollectionprocessing.eafprocessor import EafProcessor
 
 # Settings
 
@@ -19,11 +19,27 @@ class GlossChanger(EafProcessor):
     """
 
     def __init__(self, excel_with_changes, first_row = 1, old_gloss_column = 'A', new_gloss_column = 'B',
-                 meaning_column = 'C'):
+                 meaning_column = 'C', ecv_url='https://signbank.science.ru.nl/static/ecv/ngt.ecv'):
+        # Reading the ECV
+        self.gloss_ids = self.read_ecv(ecv_url)
         # Reading the Excel with changes
         self.changes = dict()
         self.read_excel_with_changes(excel_with_changes, first_row, old_gloss_column, new_gloss_column, meaning_column,
                                      self.changes)
+
+    def read_ecv(self, ecv_url):
+        from lxml import etree
+        import requests
+        ecv_str = requests.get(ecv_url)
+        ecv = etree.fromstring(ecv_str.content)
+
+        gloss_ids = {}
+        for entry in ecv.xpath('//CV_ENTRY_ML'):
+            gloss = entry.xpath('./CVE_VALUE[contains(@LANG_REF, "nld")]/text()')[0]
+            id = entry.get('CVE_ID')
+            gloss_ids[gloss] = id
+
+        return gloss_ids
 
     @staticmethod
     def read_excel_with_changes(excel_with_changes, first_row, old_gloss_column, new_gloss_column,
@@ -77,42 +93,48 @@ class GlossChanger(EafProcessor):
                 for gloss_ann_id, gloss_ann_contents in gloss_tier[0].items():
                     annotation_value = gloss_ann_contents[2]
                     if annotation_value in self.changes:
+                        new_value = self.changes[annotation_value][0]
+                        new_cve_ref = self.gloss_ids.get(new_value, None)
                         new_annotation_contents = (gloss_ann_contents[0], gloss_ann_contents[1],
-                                                   self.changes[annotation_value][0],
-                                                   gloss_ann_contents[3])
+                                                   new_value,
+                                                   gloss_ann_contents[3],
+                                                   new_cve_ref)
                         gloss_tier[0][gloss_ann_id] = new_annotation_contents
 
                         # Update or create refering meaning annotion
+                        new_meaning = self.changes[annotation_value][1]
                         if gloss_ann_id in meaning_annotation_dict:
                             meaning_annotation_tuple = meaning_annotation_dict[gloss_ann_id]
                             gloss_ann_id = meaning_annotation_tuple[0]
                             meaning_tier[1][gloss_ann_id] = (gloss_ann_id,
-                                                              meaning_annotation_tuple[1],
-                                                              self.changes[annotation_value][1],
-                                                              meaning_annotation_tuple[3],
-                                                              )
+                                                             meaning_annotation_tuple[1],
+                                                             new_meaning,
+                                                             meaning_annotation_tuple[3])
                         else:
                             eaf.add_ref_annotation(meaning_tier_id, gloss_tier_id,
                                                    eaf.timeslots[gloss_ann_contents[0]],
-                                                   self.changes[annotation_value][1])
+                                                   new_meaning)
 
 if __name__ == "__main__":
     # -o Output directory; optional
     usage = "Usage: \n" + sys.argv[0] + \
             " -o <output directory>" + \
-            " -e <excel with changes>"
+            " -e <excel with changes>" + \
+            " -r <first data row>"
 
     # Set default values
     output_dir = None
     excel_with_changes = None
 
     # Register command line arguments
-    opt_list, file_list = getopt.getopt(sys.argv[1:], 'o:e:')
+    opt_list, file_list = getopt.getopt(sys.argv[1:], 'o:e:r:')
     for opt in opt_list:
         if opt[0] == '-o':
             output_dir = opt[1]
         if opt[0] == '-e':
             excel_with_changes = opt[1]
+        if opt[0] == '-r':
+            first_data_row = int(opt[1])
 
     # Check for errors and report
     errors = []
@@ -120,6 +142,8 @@ if __name__ == "__main__":
         errors.append("No files or directories given.")
     if excel_with_changes is None:
         errors.append("No Excel with changes given.")
+    if first_data_row is None:
+        first_data_row = 1
 
     if len(errors) != 0:
         print("Errors:")
@@ -136,7 +160,7 @@ if __name__ == "__main__":
 
     # Build and run
     file_collection_processor = FileCollectionProcessor(file_list, output_dir=output_dir, extensions_to_process=["eaf"])
-    glossChanger = GlossChanger(excel_with_changes)
+    glossChanger = GlossChanger(excel_with_changes, first_row=first_data_row)
     file_collection_processor.add_file_processor(glossChanger)
     file_collection_processor.run()
 
