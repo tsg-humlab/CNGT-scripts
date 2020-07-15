@@ -103,12 +103,14 @@ class GlossChanger(EafProcessor):
 
                         # Update or create refering meaning annotion
                         new_meaning = self.changes[annotation_value][1]
+                        # print(gloss_ann_id)
                         if gloss_ann_id in meaning_annotation_dict:
+                            # print(gloss_ann_id)
                             meaning_annotation_tuple = meaning_annotation_dict[gloss_ann_id]
-                            gloss_ann_id = meaning_annotation_tuple[0]
-                            meaning_tier[1][gloss_ann_id] = (gloss_ann_id,
-                                                             meaning_annotation_tuple[1],
+                            meaning_ann_id = meaning_annotation_tuple[0]
+                            meaning_tier[1][meaning_ann_id] = (gloss_ann_id,
                                                              new_meaning,
+                                                             meaning_annotation_tuple[2],
                                                              meaning_annotation_tuple[3])
                         else:
                             eaf.add_ref_annotation(meaning_tier_id, gloss_tier_id,
