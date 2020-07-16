@@ -44,7 +44,7 @@ class SearchReplace(EafProcessor):
             changes[sheet_name] = sorted(search_replace_values,
                                          key=lambda search_replace_tuple: search_replace_tuple[0],
                                          reverse=True)
-        print("Sheets: ", ", ".join(changes.keys()), str(workbook.get_sheet_names()))
+        print("Sheets: ", str(changes), str(workbook.get_sheet_names()))
 
     def process_eaf(self, eaf, file_name):
         print("EAF file: " + file_name)
@@ -53,11 +53,28 @@ class SearchReplace(EafProcessor):
             for tier_name in eaf.get_tier_ids_for_linguistic_type(lingtype):
                 print("Tier: ", tier_name)
                 tier = eaf.tiers[tier_name]
+
+                # aligned annotations
                 for ann_id, ann_contents in tier[0].items():
                     new_value = ann_contents[2]
+                    if ann_contents[2] == 'mounia':
+                        print(ann_contents[2])
                     for search_replace_tuple in self.changes[lingtype]:
                         new_value = new_value.replace(search_replace_tuple[0], search_replace_tuple[1])
+                    if ann_contents[2] == 'mounia':
+                        print(new_value)
                     tier[0][ann_id] = (ann_contents[0], ann_contents[1], new_value, ann_contents[3], ann_contents[4])
+
+                # reference annotations
+                for ann_id, ann_contents in tier[1].items():
+                    new_value = ann_contents[1]
+                    if ann_contents[1] == 'mounia':
+                        print(ann_contents[1])
+                    for search_replace_tuple in self.changes[lingtype]:
+                        new_value = new_value.replace(search_replace_tuple[0], search_replace_tuple[1])
+                    if ann_contents[1] == 'mounia':
+                        print(new_value)
+                    tier[1][ann_id] = (ann_contents[0], new_value, ann_contents[2], ann_contents[3], None)
 
 if __name__ == "__main__":
     # -o Output directory; optional
