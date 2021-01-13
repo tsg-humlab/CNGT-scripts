@@ -13,8 +13,9 @@ from filecollectionprocessing.eafprocessor import EafProcessor
 
 
 class EafToWebVttTransformer(EafProcessor):
-    def __init__(self, tier_base_name, subjects=['S1', 'S2'], hands=['']):
+    def __init__(self, tier_base_name, fallback_tier_base_name, subjects=['S1', 'S2'], hands=['']):
         self.tier_base_name = tier_base_name
+        self.fallback_tier_base_name = fallback_tier_base_name
         self.subjects = subjects
         self.hands = hands
 
@@ -44,6 +45,11 @@ class EafToWebVttTransformer(EafProcessor):
             for hand in self.hands:
                 tier_id = self.tier_base_name + hand + ' ' + str(subject_id)
                 tier = eaf.tiers[tier_id]
+                if not tier[0].values() and self.fallback_tier_base_name:
+                    print("Using fallback tier {}".format(self.fallback_tier_base_name))
+                    tier_id = self.fallback_tier_base_name + hand + ' ' + str(subject_id)
+                    tier = eaf.tiers[tier_id]
+
                 if len(tier) >= 3 and 'PARTICIPANT' in tier[2]:
                     participant = tier[2]['PARTICIPANT']
                     annotations.extend(
@@ -146,19 +152,26 @@ class EafToWebVttTransformer(EafProcessor):
 if __name__ == "__main__":
     # -o Output directory; optional
     usage = "Usage: \n" + sys.argv[0] + \
-            " -o <output directory>"
+            " -o <output directory>" \
+            " -t <tier base name>" \
+            " -f <fallback tier base name>" \
+            " -h <hand [LR]>"
 
     # Set default values
     output_dir = None
+    tier_base_name = None
+    fallback_tier_base_name = None
 
     # Register command line arguments
-    opt_list, file_list = getopt.getopt(sys.argv[1:], 'o:t:h:')
+    opt_list, file_list = getopt.getopt(sys.argv[1:], 'o:t:f:h:')
     hands = []
     for opt in opt_list:
         if opt[0] == '-o':
             output_dir = opt[1]
         if opt[0] == '-t':
             tier_base_name = opt[1]
+        if opt[0] == '-f':
+            fallback_tier_base_name = opt[1]
         if opt[0] == '-h':
             hands.append(opt[1])
 
@@ -166,6 +179,8 @@ if __name__ == "__main__":
     errors = []
     if file_list is None or len(file_list) == 0:
         errors.append("No files or directories given.")
+    if tier_base_name is None:
+        errors.append("No tier base name given")
 
     if len(errors) != 0:
         print("Errors:")
@@ -184,6 +199,8 @@ if __name__ == "__main__":
     args = {}
     if tier_base_name:
         args['tier_base_name'] = tier_base_name
+    if fallback_tier_base_name:
+        args['fallback_tier_base_name'] = fallback_tier_base_name
     if hands:
         args['hands'] = hands
     eafToWebVttTransformer = EafToWebVttTransformer(**args)

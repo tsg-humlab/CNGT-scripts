@@ -334,7 +334,7 @@ class EafMetadataCalculator(EafProcessor):
 
     def get_interaction(self, eaf):
         """
-        Total number of TL and TR annotations on the two tiers 'OOH DomRev Point S1' and 'OOH DomRev Point S2'
+        Total number of TL and TR annotations on the two tiers 'DomRev Point S1' and 'DomRev Point S2'
         :param eaf: 
         :return: 
         """
@@ -347,7 +347,7 @@ class EafMetadataCalculator(EafProcessor):
 
     def get_dominance_reversal(self, eaf):
         """
-        Total number of RL and LR annotations on the two tiers 'OOH DomRev Point S1' and 'OOH DomRev Point S2'
+        Total number of RL and LR annotations on the two tiers 'DomRev Point S1' and 'DomRev Point S2'
         :param eaf: 
         :return: 
         """
@@ -362,7 +362,7 @@ class EafMetadataCalculator(EafProcessor):
         total = 0
         try:
             for subject_id in [1, 2]:
-                tier_id = 'OOH DomRev Point S' + str(subject_id)
+                tier_id = 'DomRev Point S' + str(subject_id)
                 tier = eaf.tiers[tier_id]
                 current_annotations = transform_tier_data(eaf, tier, lambda a: a in value_set)
                 total += len(current_annotations)

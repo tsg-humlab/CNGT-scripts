@@ -22,6 +22,7 @@ lines[0] = lines[0].replace(u'\ufeff', '')
 
 # If second line is empty assume a title
 if lines[1].strip() == '':
+    print("EMTPY SECOND LINE")
     title = lines.pop(0)
 else:
     lines.insert(0, '')
