@@ -81,33 +81,33 @@ class EafMetadataCalculator(EafProcessor):
         print(file_name, file=sys.stdout)
         self.count_signs(eaf, file_name)
 
-        file_name = os.path.basename(file_name)
-        self.metadata[file_name] = {}
+        session_id = file_name_to_session_id(file_name)
+        self.metadata[session_id] = {}
 
-        self.metadata[file_name]['participants'] = get_participants(eaf)
+        self.metadata[session_id]['participants'] = get_participants(eaf)
 
-        self.metadata[file_name]['speed'] = round(self.get_speed(eaf), 1)
-        self.update_range('speed', self.metadata[file_name]['speed'])
+        self.metadata[session_id]['speed'] = round(self.get_speed(eaf), 1)
+        self.update_range('speed', self.metadata[session_id]['speed'])
 
-        self.metadata[file_name]['differentSigns'] = self.get_different_signs(eaf)
-        self.update_range('differentSigns', self.metadata[file_name]['differentSigns'])
+        self.metadata[session_id]['differentSigns'] = self.get_different_signs(eaf)
+        self.update_range('differentSigns', self.metadata[session_id]['differentSigns'])
 
-        self.metadata[file_name]['classifiers'] = round(self.get_classifiers(eaf), 1)
-        self.update_range('classifiers', self.metadata[file_name]['classifiers'])
+        self.metadata[session_id]['classifiers'] = round(self.get_classifiers(eaf), 1)
+        self.update_range('classifiers', self.metadata[session_id]['classifiers'])
 
         sentence_length = self.get_sentence_length(eaf)
         if sentence_length:
-            self.metadata[file_name]['sentenceLength'] = round(sentence_length, 1)
-            self.update_range('sentenceLength', self.metadata[file_name]['sentenceLength'])
+            self.metadata[session_id]['sentenceLength'] = round(sentence_length, 1)
+            self.update_range('sentenceLength', self.metadata[session_id]['sentenceLength'])
 
-        self.metadata[file_name]['fingerspelling'] = self.get_fingerspelling(eaf)
-        self.update_range('fingerspelling', self.metadata[file_name]['fingerspelling'])
+        self.metadata[session_id]['fingerspelling'] = self.get_fingerspelling(eaf)
+        self.update_range('fingerspelling', self.metadata[session_id]['fingerspelling'])
 
-        self.metadata[file_name]['interaction'] = self.get_interaction(eaf)
-        self.update_range('interaction', self.metadata[file_name]['interaction'])
+        self.metadata[session_id]['interaction'] = self.get_interaction(eaf)
+        self.update_range('interaction', self.metadata[session_id]['interaction'])
 
-        self.metadata[file_name]['dominanceReversal'] = self.get_dominance_reversal(eaf)
-        self.update_range('dominanceReversal', self.metadata[file_name]['dominanceReversal'])
+        self.metadata[session_id]['dominanceReversal'] = self.get_dominance_reversal(eaf)
+        self.update_range('dominanceReversal', self.metadata[session_id]['dominanceReversal'])
 
     def calculate_ranges(self):
         ranges = {}
@@ -302,7 +302,7 @@ class EafMetadataCalculator(EafProcessor):
         annotation_frequencies_80pct = set([ann[0] for ann in annotation_frequencies if ann[1] in included_frequencies])
 
         for file_path in self.annotations_per_signer_per_file:
-            file_name = os.path.basename(file_path)
+            file_name = file_name_to_session_id(file_path)
             low_frequency_total = 0
             for subject_id in [1, 2]:
                 annotations = [ann['value'] for ann in self.annotations_per_signer_per_file[file_path][subject_id]]
@@ -443,6 +443,13 @@ def get_creation_time(fname):
             date_time_obj = DT.datetime.now(tz=get_current_timezone())
 
         return date_time_obj
+        
+        
+def file_name_to_session_id(file_name):
+    (file_name, ext) = os.path.splitext(os.path.basename(file_name))
+    session_id = file_name[4:]
+    return session_id
+
 
 if __name__ == "__main__":
     # -o Output directory; optional
