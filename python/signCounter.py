@@ -278,7 +278,7 @@ class SignCounter:
 
                     try:
                         for something in self.metadata[person].keys():
-                            if something is not 'self.region_metadata_id':
+                            if something != 'self.region_metadata_id':
                                 item = self.metadata[person][something]
                                 self.freqsPerSomething[something][item][person][gloss] += 1
                     except:
