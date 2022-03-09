@@ -9,8 +9,10 @@ import json
 import os
 import re
 import sys
+import csv
 from lxml import etree
 from collections import defaultdict
+import flatdict
 
 
 class SignCounter:
@@ -339,17 +341,42 @@ class SignCounter:
         return self.sign_counts
 
 
+def output_results(result, csv_file=False):
+    if csv_file:
+        # Flatten result dict
+        flat_dicts = {}
+        columns = set()
+        for gloss, data in result.items():
+            flat_data = flatdict.FlatDict(data, delimiter='/')
+            flat_dicts[gloss] = flat_data
+            columns.update(flat_data.keys())
+
+        # Write to csv file
+        with open(csv_file, 'w') as f:
+            freqs_writer = csv.writer(f)
+            columns_list = sorted(columns)
+            freqs_writer.writerow(['gloss'] + columns_list)
+            for gloss, flat_dict in flat_dicts.items():
+                data_field = [flat_dict.get(name, '') for name in columns_list]
+                freqs_writer.writerow([gloss] + data_field)
+    else:
+        print(json.dumps(result, sort_keys=True, indent=4))
+
+
 if __name__ == "__main__":
     usage = "Usage: \n" + sys.argv[0] + " -m <metadata file> -o <mimimum overlap> <file|directory ...>"
     errors = []
-    optlist, file_list = getopt.getopt(sys.argv[1:], 'm:o:')
+    optlist, file_list = getopt.getopt(sys.argv[1:], 'm:o:', ['csv='])
     metadata_fname = ''
     min_overlap = None
+    csv_file = None
     for opt in optlist:
         if opt[0] == '-m':
             metadata_fname = opt[1]
         if opt[0] == '-o':
             min_overlap = opt[1]
+        if opt[0] == '--csv':
+            csv_file = opt[1]
 
     if min_overlap is None or min_overlap == '':
         errors.append("No minimum overlap file given.")
@@ -365,4 +392,5 @@ if __name__ == "__main__":
 
     signCounter = SignCounter(metadata_fname, file_list, min_overlap)
     signCounter.run()
-    print(json.dumps(signCounter.get_result(), sort_keys=True, indent=4))
+    result = signCounter.get_result()
+    output_results(result, csv_file)
