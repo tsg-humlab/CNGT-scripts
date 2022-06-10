@@ -252,7 +252,7 @@ class SignCounter:
         for unit in list_of_glosses:
             tmp = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
             for annotation in unit:
-                gloss = annotation['cve_ref'] if annotation['cve_ref'] else annotation['value']
+                gloss = annotation['value']
 
                 try:
                     re.sub(r'\n', '', gloss)
