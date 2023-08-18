@@ -61,7 +61,7 @@ class MiddleFrameExtracter:
         new_dirs = []
         for dir_name in ["all", "middle"]:
             new_dir = self.output_dir + os.sep + \
-                      os.path.basename(urlparse(video_file).path) + "-frames" + os.sep + dir_name
+                      os.path.basename(video_file) + "-frames" + os.sep + dir_name
             if not os.path.isdir(new_dir):
                 os.makedirs(new_dir, 0o750)
             new_dirs.append(new_dir)
@@ -100,7 +100,7 @@ class MiddleFrameExtracter:
         if len(frames) != 0:
             middle_frame_index = int(floor(len(frames)/2))
             middle_frame = frames[middle_frame_index]
-            video_base_name = os.path.basename(urlparse(video_file).path)
+            video_base_name = os.path.basename(video_file)
             video_name = os.path.splitext(video_base_name)[0]
             video_still = dirs[1] + os.sep + video_name + '.png'
             if not dry_run:
